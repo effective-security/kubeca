@@ -71,7 +71,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ekspand/kubeca
+            effectivesecurity/kubeca
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -98,7 +98,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ekspand/kubecertinit
+            effectivesecurity/kubecertinit
           tags: |
             type=ref,event=branch
             type=ref,event=pr

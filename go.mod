@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/effective-security/porto v0.0.0-20220709095626-64cdd3752dbd
 	github.com/effective-security/xlog v0.0.0-20220601085009-0ffa60d88c6e
-	github.com/effective-security/xpki v0.1.2-0.20220703130403-eac5eb68194c
+	github.com/effective-security/xpki v0.1.2-0.20220717135854-dc04e51314b7
 	github.com/go-logr/logr v1.2.3
 	github.com/go-phorce/cov-report v1.1.1-0.20200622030546-3fb510c4b1ba
 	github.com/mattn/goreman v0.3.12

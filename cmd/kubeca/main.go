@@ -20,15 +20,15 @@ import (
 )
 
 func main() {
-	cryptoprov.Register("SoftHSM", crypto11.LoadProvider)
-	cryptoprov.Register("PKCS11", crypto11.LoadProvider)
-	cryptoprov.Register(awskmscrypto.ProviderName, awskmscrypto.KmsLoader)
-	cryptoprov.Register(awskmscrypto.ProviderName+"-1", awskmscrypto.KmsLoader)
-	cryptoprov.Register(awskmscrypto.ProviderName+"-2", awskmscrypto.KmsLoader)
+	_ = cryptoprov.Register("SoftHSM", crypto11.LoadProvider)
+	_ = cryptoprov.Register("PKCS11", crypto11.LoadProvider)
+	_ = cryptoprov.Register(awskmscrypto.ProviderName, awskmscrypto.KmsLoader)
+	_ = cryptoprov.Register(awskmscrypto.ProviderName+"-1", awskmscrypto.KmsLoader)
+	_ = cryptoprov.Register(awskmscrypto.ProviderName+"-2", awskmscrypto.KmsLoader)
 
-	cryptoprov.Register(gcpkmscrypto.ProviderName, gcpkmscrypto.KmsLoader)
-	cryptoprov.Register(gcpkmscrypto.ProviderName+"-1", gcpkmscrypto.KmsLoader)
-	cryptoprov.Register(gcpkmscrypto.ProviderName+"-2", gcpkmscrypto.KmsLoader)
+	_ = cryptoprov.Register(gcpkmscrypto.ProviderName, gcpkmscrypto.KmsLoader)
+	_ = cryptoprov.Register(gcpkmscrypto.ProviderName+"-1", gcpkmscrypto.KmsLoader)
+	_ = cryptoprov.Register(gcpkmscrypto.ProviderName+"-2", gcpkmscrypto.KmsLoader)
 
 	f := controller.CertificateSigningRequestControllerFlags{}
 	var debugLogging bool
@@ -52,7 +52,7 @@ func main() {
 		formatter := stackdriver.NewFormatter(os.Stderr, "kubeca")
 		xlog.SetFormatter(formatter)
 	}
-	xlog.GetFormatter().WithCaller(true)
+	xlog.GetFormatter().Options(xlog.FormatWithCaller)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debugLogging)))
 

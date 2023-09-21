@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -71,14 +71,14 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 
 	keyFile := path.Join(r.CertDir, "tls.key")
 	// TODO: for 0600 the POD got access denied
-	if err := ioutil.WriteFile(keyFile, pemKeyBytes, 0644); err != nil {
+	if err := os.WriteFile(keyFile, pemKeyBytes, 0644); err != nil {
 		return errors.WithMessage(err, "unable to save key")
 	}
 
 	logger.KV(xlog.INFO, "status", "wrote_key", "file", keyFile)
 
 	csrFile := path.Join(r.CertDir, "tls.csr")
-	if err := ioutil.WriteFile(csrFile, pemCsr, 0644); err != nil {
+	if err := os.WriteFile(csrFile, pemCsr, 0644); err != nil {
 		return errors.WithMessage(err, "unable to save CSR")
 	}
 
@@ -165,7 +165,7 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 	}
 
 	certFile := path.Join(r.CertDir, "tls.crt")
-	if err := ioutil.WriteFile(certFile, certificate, 0644); err != nil {
+	if err := os.WriteFile(certFile, certificate, 0644); err != nil {
 		return errors.WithMessage(err, "unable to save certificate")
 	}
 

@@ -94,7 +94,7 @@ func TestCreate(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, "unable to save key: open /tmp/tests/certinit/tls.key: no such file or directory", err.Error())
 
-	os.MkdirAll(r.CertDir, 0755)
+	_ = os.MkdirAll(r.CertDir, 0755)
 	defer os.RemoveAll(r.CertDir)
 
 	err = r.Create(context.Background(), mocked)

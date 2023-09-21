@@ -42,7 +42,7 @@ func main() {
 		formatter = stackdriver.NewFormatter(os.Stderr, "kubecertinit")
 		xlog.SetFormatter(formatter)
 	} else {
-		formatter = xlog.NewPrettyFormatter(os.Stderr)
+		formatter = xlog.NewJSONFormatter(os.Stderr)
 	}
 	formatter.Options(xlog.FormatWithCaller)
 	xlog.SetFormatter(formatter)

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -20,6 +21,12 @@ import (
 )
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic: %v\n%s\n", r, string(debug.Stack()))
+		}
+	}()
+
 	_ = cryptoprov.Register("SoftHSM", crypto11.LoadProvider)
 	_ = cryptoprov.Register("PKCS11", crypto11.LoadProvider)
 	_ = cryptoprov.Register(awskmscrypto.ProviderName, awskmscrypto.KmsLoader)
@@ -47,11 +54,15 @@ func main() {
 
 	flag.Parse()
 
+	var formatter xlog.Formatter
 	if withStackdriver {
-		formatter := stackdriver.NewFormatter(os.Stderr, "kubeca")
+		formatter = stackdriver.NewFormatter(os.Stderr, "kubeca")
 		xlog.SetFormatter(formatter)
+	} else {
+		formatter = xlog.NewPrettyFormatter(os.Stderr)
 	}
-	xlog.GetFormatter().Options(xlog.FormatWithCaller)
+	formatter.Options(xlog.FormatWithCaller)
+	xlog.SetFormatter(formatter)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debugLogging)))
 

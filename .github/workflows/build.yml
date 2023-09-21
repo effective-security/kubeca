@@ -30,11 +30,6 @@ jobs:
     env:
       EVENT_NUMBER: ${{ github.event.number }}
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: go.mod
-
       - name: Configure git for private modules
         env:
           TOKEN: ${{ secrets.BUILDER_PAT }}
@@ -44,6 +39,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
 
       - name: Prepare
         run: make vars tools folders generate  version change_log

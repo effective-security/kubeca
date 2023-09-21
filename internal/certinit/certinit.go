@@ -79,7 +79,7 @@ func (r *Request) Create(ctx context.Context, client *CertClient) error {
 		return errors.New("missing required signer name parameter")
 	}
 
-	logger.KV(xlog.INFO,
+	logger.ContextKV(ctx, xlog.INFO,
 		"ns", r.Namespace,
 		"pod", r.PodName,
 		"signer", r.SignerName,

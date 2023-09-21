@@ -33,7 +33,7 @@ type CertificateSigningRequestSigningReconciler struct {
 
 // Reconcile implementation
 func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logger.WithValues("ns", req.NamespacedName)
+	logger := logger.WithValues("ns", req.NamespacedName)
 	var csr capi.CertificateSigningRequest
 	if err := r.Client.Get(ctx, req.NamespacedName, &csr); client.IgnoreNotFound(err) != nil {
 		return ctrl.Result{}, errors.WithMessagef(err, "error getting CSR")
@@ -42,15 +42,15 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 
 	switch {
 	case !csr.DeletionTimestamp.IsZero():
-		log.KV(xlog.INFO, "ignoring", "CSR has been deleted")
+		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR has been deleted")
 	case csr.Spec.SignerName == "":
-		log.KV(xlog.INFO, "ignoring", "CSR does not have a signer name: "+string(json))
+		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR does not have a signer name: "+string(json))
 	case csr.Status.Certificate != nil:
-		log.KV(xlog.INFO, "ignoring", "CSR has already been signed")
+		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR has already been signed")
 	case !isCertificateRequestApproved(&csr):
-		log.KV(xlog.INFO, "ignoring", "CSR is not approved")
+		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR is not approved")
 	default:
-		log.KV(xlog.DEBUG, "csr", string(json))
+		logger.ContextKV(ctx, xlog.DEBUG, "csr", string(json))
 
 		/*
 			// TODO: check
@@ -73,7 +73,7 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 			}
 			cert, raw, err := issuer.Sign(signReq)
 			if err != nil {
-				logger.KV(xlog.ERROR,
+				logger.ContextKV(ctx, xlog.ERROR,
 					"reason", "unable to sign",
 					"err", err)
 				return ctrl.Result{}, errors.WithMessagef(err, "error auto signing CSR")
@@ -81,7 +81,7 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 
 			b := new(strings.Builder)
 			print.Certificate(b, cert, false)
-			log.KV(xlog.NOTICE, "status", "signed", "certificate", b.String())
+			logger.ContextKV(ctx, xlog.NOTICE, "status", "signed", "certificate", b.String())
 
 			if len(issuer.PEM()) > 0 {
 				raw = append(raw, []byte(`\n`)...)
@@ -92,14 +92,14 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 			csr.Status.Certificate = []byte(strings.TrimSpace(string(raw)))
 
 			if err := r.Client.Status().Patch(ctx, &csr, patch); err != nil {
-				logger.KV(xlog.ERROR,
+				logger.ContextKV(ctx, xlog.ERROR,
 					"reason", "unable to patch status",
 					"err", err)
 				return ctrl.Result{}, errors.WithMessagef(err, "error patching CSR")
 			}
 			r.EventRecorder.Event(&csr, v1.EventTypeNormal, "Signed", "The CSR has been signed")
 		} else {
-			log.KV(xlog.INFO, "ignoring", "issuer not found", "signer", csr.Spec.SignerName)
+			logger.ContextKV(ctx, xlog.INFO, "ignoring", "issuer not found", "signer", csr.Spec.SignerName)
 		}
 	}
 	return ctrl.Result{}, nil

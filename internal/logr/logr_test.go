@@ -18,7 +18,7 @@ func TestLogr(t *testing.T) {
 	writer := bufio.NewWriter(&b)
 
 	xlog.SetGlobalLogLevel(xlog.INFO)
-	xlog.SetFormatter(xlog.NewPrettyFormatter(writer, false))
+	xlog.SetFormatter(xlog.NewPrettyFormatter(writer))
 
 	logr := logr.New(logger)
 	assert.True(t, logr.Enabled())
@@ -29,6 +29,6 @@ func TestLogr(t *testing.T) {
 	logr.Error(errors.New("some error"), "error message", "k1", "v1")
 
 	result := b.String()
-	assert.Contains(t, result, "I | logr: src=Info, src=\"x\", k1=\"val1\", k1=\"v1\", msg=\"test message\"\n")
-	assert.Contains(t, result, "E | logr: src=Error, src=\"x\", k1=\"val1\", k1=\"v1\", msg=\"error message\", err=\"some error\"\n")
+	assert.Contains(t, result, "I | pkg=logr, func=Info, src=\"x\", k1=\"val1\", k1=\"v1\", msg=\"test message\"\n")
+	assert.Contains(t, result, "E | pkg=logr, func=Error, src=\"x\", k1=\"val1\", k1=\"v1\", msg=\"error message\", err=\"some error\"\n")
 }

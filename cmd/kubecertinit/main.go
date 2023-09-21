@@ -33,7 +33,7 @@ func main() {
 		formatter := stackdriver.NewFormatter(os.Stderr, "kubecertinit")
 		xlog.SetFormatter(formatter)
 	}
-	xlog.GetFormatter().WithCaller(true)
+	xlog.GetFormatter().Options(xlog.FormatWithCaller)
 
 	// Create a Kubernetes client.
 	client, err := certinit.NewClient(kubeConfig, r.Namespace)

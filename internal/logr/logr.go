@@ -31,7 +31,7 @@ func (p *prov) Enabled(level int) bool {
 // the log line.  The key/value pairs can then be used to add additional
 // variable information.  The key/value pairs should alternate string
 // keys and arbitrary values.
-func (p *prov) Info(level int, msg string, keysAndValues ...interface{}) {
+func (p *prov) Info(level int, msg string, keysAndValues ...any) {
 	kv := append(keysAndValues, "msg", msg)
 	p.logger.KV(xlog.INFO, kv...)
 }
@@ -44,14 +44,14 @@ func (p *prov) Info(level int, msg string, keysAndValues ...interface{}) {
 // The msg field should be used to add context to any underlying error,
 // while the err field should be used to attach the actual error that
 // triggered this log line, if present.
-func (p *prov) Error(err error, msg string, keysAndValues ...interface{}) {
+func (p *prov) Error(err error, msg string, keysAndValues ...any) {
 	kv := append(keysAndValues, "msg", msg, "err", err.Error())
 	p.logger.KV(xlog.ERROR, kv...)
 }
 
 // WithValues adds some key-value pairs of context to a logger.
 // See Info for documentation on how key/value pairs work.
-func (p *prov) WithValues(keysAndValues ...interface{}) logr.LogSink {
+func (p *prov) WithValues(keysAndValues ...any) logr.LogSink {
 	p.logger = p.logger.WithValues(keysAndValues...)
 	return p
 }

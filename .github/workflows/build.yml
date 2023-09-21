@@ -26,18 +26,14 @@ jobs:
           https://api.github.com/repos/${{ github.repository }}
 
   TestAndDeploy:
-    strategy:
-      matrix:
-        go-version: [1.18.x]
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     env:
       EVENT_NUMBER: ${{ github.event.number }}
     steps:
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
 
       - name: Configure git for private modules
         env:

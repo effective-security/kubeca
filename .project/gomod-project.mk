@@ -62,7 +62,7 @@ GOLANG_HOST := golang.org
 GIT_DIRTY := $(shell git describe --dirty --always --tags --long | grep -q -e '-dirty' && echo -$$HOSTNAME)
 GIT_HASH := $(shell git rev-parse --short HEAD)
 # number of commits
-COMMITS_COUNT := $(shell git rev-list --no-merges --count HEAD)
+COMMITS_COUNT := $(shell git rev-list --count ${GIT_HASH})
 #
 PROD_VERSION := $(shell cat .VERSION)
 GIT_VERSION := $(shell printf %s.%d%s ${PROD_VERSION} ${COMMITS_COUNT} ${GIT_DIRTY})
@@ -70,19 +70,17 @@ COVPATH=.coverage
 
 # List of all .go files in the project, excluding vendor and .tools
 GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./.tools/*" -not -path "./.gopath/*")
+GOPACKAGES = $(shell go list ./...)
 
 export PROJ_DIR=$(PROJ_ROOT)
 export PROJ_BIN=$(PROJ_ROOT)/bin
 export GOBIN=$(PROJ_ROOT)/bin
-export VENDOR_SRC=$(PROJ_ROOT)/vendor
-
-# tools path
-export PATH := ${PROJ_BIN}:${PATH}
+export PATH := ${PATH}:${PROJ_BIN}
 
 # List of all .go files in the project, exluding vendor and tools
 PROJ_GOFILES = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./.gopath/*" -not -path "./.tools/*")
 
-COVERAGE_EXCLUSIONS="/rt\.go|/bindata\.go|_test.go|_mock.go"
+COVERAGE_EXCLUSIONS="/rt\.go|/bindata\.go|_test\.go|_mock\.go|main\.go"
 
 # flags
 INTEGRATION_TAG="integration"
@@ -116,10 +114,11 @@ endif
 #
 define go_test_cover
 	echo  "Testing in $(1)"
+	rm -rf ${COVPATH}
 	mkdir -p ${COVPATH}/race
 	exitCode=0 \
-	&& cd ${1} && go list $(5)/... | ( while read -r pkg; do \
-		result=`GORACE=$(4) go test $(2) $$pkg -coverpkg=$(5)/... -covermode=count $(3) \
+	&& cd $(1) && go list $(5)/... | ( while read -r pkg; do \
+		result=`GORACE=$(4) go test -p 40 $(2) $$pkg -coverpkg=$(5)/... -covermode=count $(3) \
 			-coverprofile=${COVPATH}/cc_$$(echo $$pkg | tr "/" "_").out \
 			2>&1 | grep --invert-match "warning: no packages"` \
 			&& test_result=`echo "$$result" | tail -1` \
@@ -138,6 +137,7 @@ endef
 # assuming ${TOOLS_BIN} contains go-junit-report & cov-report
 define go_test_cover_junit
 	echo  "Testing in $(1)"
+	rm -rf ${COVPATH}
 	mkdir -p ${COVPATH}/race
 	set -o pipefail; failure=0; while read -r pkg; do \
 		cd $(1) && GORACE=$(4) go test $(2) -v $$pkg -coverpkg=$(5)/... -covermode=count $(3) \
@@ -190,34 +190,39 @@ bench:
 
 generate:
 	go generate ./...
+	gofmt -s -l -w -r 'interface{} -> any' .
 
 fmt:
 	echo "Running Fmt"
-	gofmt -s -l -w ${GOFILES_NOVENDOR}
+	gofmt -s -l -w -r 'interface{} -> any' .
+
+fmt-check:
+	echo "Running Fmt check"
+	gofmt -d -l -r 'interface{} -> any' .
+	@test -z "$(shell gofmt -l -r 'interface{} -> any' . | tee /dev/stderr)"
 
 vet:
 	echo "Running vet"
-	go vet ${BUILD_FLAGS} ./...
+	go vet ${BUILD_FLAGS} ${PROJ_PACKAGE}/...
 
-lint:
+lint: fmt vet
 	echo "Running lint"
-	go list ./... | grep -v /vendor/ | xargs -L1 golint -set_exit_status
+	golangci-lint run --timeout 20m0s ./...
 
-test: fmt vet lint
+test:
 	echo "Running test"
-	go test ${BUILD_FLAGS} ${TEST_RACEFLAG} ${PROJ_PACKAGE}/...
+	go test ${TEST_FLAGS} ${TEST_RACEFLAG} ${PROJ_PACKAGE}/...
 
 testshort:
 	echo "Running testshort"
-	go test ${BUILD_FLAGS} ${TEST_RACEFLAG} ./... --test.short
+	go test ${TEST_FLAGS} ${TEST_RACEFLAG} ./... --test.short
 
 # you can run a subset of tests with make sometests testname=<testnameRegex>
 sometests:
-	go test ${BUILD_FLAGS} ${TEST_RACEFLAG} ./... --test.short -run $(testname)
+	go test ${TEST_FLAGS} ${TEST_RACEFLAG} ./... --test.short -run $(testname)
 
-covtest: fmt vet lint
+covtest: fmt vet
 	echo "Running covtest"
-	rm -rf ${COVPATH}
 	$(call go_test_cover,${PROJ_DIR},${BUILD_FLAGS},${TEST_RACEFLAG},${TEST_GORACEOPTIONS},.,${COVERAGE_EXCLUSIONS})
 
 # Runs integration tests as well

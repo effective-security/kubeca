@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 
 	"github.com/effective-security/kubeca/internal/certinit"
 	"github.com/effective-security/xlog"
@@ -12,6 +14,12 @@ import (
 )
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic: %v\n%s\n", r, string(debug.Stack()))
+		}
+	}()
+
 	var kubeConfig string
 	var withStackdriver bool
 	r := &certinit.Request{}
@@ -29,11 +37,15 @@ func main() {
 	flag.BoolVar(&withStackdriver, "stackdriver", false, "Enable stackdriver logs formatting.")
 	flag.Parse()
 
+	var formatter xlog.Formatter
 	if withStackdriver {
-		formatter := stackdriver.NewFormatter(os.Stderr, "kubecertinit")
+		formatter = stackdriver.NewFormatter(os.Stderr, "kubecertinit")
 		xlog.SetFormatter(formatter)
+	} else {
+		formatter = xlog.NewPrettyFormatter(os.Stderr)
 	}
-	xlog.GetFormatter().Options(xlog.FormatWithCaller)
+	formatter.Options(xlog.FormatWithCaller)
+	xlog.SetFormatter(formatter)
 
 	// Create a Kubernetes client.
 	client, err := certinit.NewClient(kubeConfig, r.Namespace)

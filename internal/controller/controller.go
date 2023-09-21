@@ -5,6 +5,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	// +kubebuilder:scaffold:imports
 	"github.com/effective-security/xlog"
@@ -28,7 +29,6 @@ func init() {
 // CertificateSigningRequestControllerFlags provides controller flags
 type CertificateSigningRequestControllerFlags struct {
 	MetricsAddr          string
-	Port                 int
 	EnableLeaderElection bool
 	LeaderElectionID     string
 	CaCfgPath            string
@@ -38,11 +38,12 @@ type CertificateSigningRequestControllerFlags struct {
 // StartCertificateSigningRequestController starts controller loop
 func StartCertificateSigningRequestController(f *CertificateSigningRequestControllerFlags) error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: f.MetricsAddr,
-		Port:               f.Port,
-		LeaderElection:     f.EnableLeaderElection,
-		LeaderElectionID:   f.LeaderElectionID,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: f.MetricsAddr,
+		},
+		LeaderElection:   f.EnableLeaderElection,
+		LeaderElectionID: f.LeaderElectionID,
 	})
 	if err != nil {
 		logger.KV(xlog.ERROR,

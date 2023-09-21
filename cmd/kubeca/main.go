@@ -35,7 +35,6 @@ func main() {
 	var withStackdriver bool
 	flag.BoolVar(&debugLogging, "debug", false, "Enable debug logging.")
 	flag.StringVar(&f.MetricsAddr, "metrics-addr", ":9090", "The address the metric endpoint binds to.")
-	flag.IntVar(&f.Port, "port", 9443, "The port for the controller.")
 	flag.BoolVar(&f.EnableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")

@@ -42,11 +42,11 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 
 	switch {
 	case !csr.DeletionTimestamp.IsZero():
-		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR has been deleted")
+		logger.ContextKV(ctx, xlog.DEBUG, "ignoring", "CSR has been deleted")
 	case csr.Spec.SignerName == "":
 		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR does not have a signer name: "+string(json))
 	case csr.Status.Certificate != nil:
-		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR has already been signed")
+		logger.ContextKV(ctx, xlog.DEBUG, "ignoring", "CSR has already been signed")
 	case !isCertificateRequestApproved(&csr):
 		logger.ContextKV(ctx, xlog.INFO, "ignoring", "CSR is not approved")
 	default:
@@ -76,7 +76,7 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 				logger.ContextKV(ctx, xlog.ERROR,
 					"reason", "unable to sign",
 					"err", err)
-				return ctrl.Result{}, errors.WithMessagef(err, "error auto signing CSR")
+				return ctrl.Result{}, errors.WithMessagef(err, "failed to sign CSR")
 			}
 
 			b := new(strings.Builder)
@@ -84,7 +84,7 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 			logger.ContextKV(ctx, xlog.NOTICE, "status", "signed", "certificate", b.String())
 
 			if len(issuer.PEM()) > 0 {
-				pem := string(raw) + "\n" + strings.TrimSpace(issuer.PEM())
+				pem := strings.TrimSpace(string(raw)) + "\n" + strings.TrimSpace(issuer.PEM())
 				raw = []byte(pem)
 			}
 

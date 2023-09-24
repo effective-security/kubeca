@@ -84,8 +84,8 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 			logger.ContextKV(ctx, xlog.NOTICE, "status", "signed", "certificate", b.String())
 
 			if len(issuer.PEM()) > 0 {
-				raw = append(raw, []byte(`\n`)...)
-				raw = append(raw, []byte(issuer.PEM())...)
+				pem := string(raw) + "\n" + strings.TrimSpace(issuer.PEM())
+				raw = []byte(pem)
 			}
 
 			patch := client.MergeFrom(csr.DeepCopy())

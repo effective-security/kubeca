@@ -52,10 +52,10 @@ jobs:
         run: make build covtest
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -63,7 +63,7 @@ jobs:
       - name: Docker kubeca meta
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: meta_kubeca
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -79,7 +79,7 @@ jobs:
       - name: Docker kubeca docker_build_kubecertinit
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: docker_build_kubeca
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           file: ./Dockerfile.kubeca
           context: .
@@ -90,7 +90,7 @@ jobs:
       - name: Docker kubecertinit meta
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: meta_kubecertinit
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -106,7 +106,7 @@ jobs:
       - name: Docker kubecertinit build
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: docker_build_kubecertinit
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           file: ./Dockerfile.kubecertinit
           context: .

@@ -26,6 +26,7 @@ clean:
 		${COVPATH} \
 
 tools:
+	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/go-phorce/cov-report/cmd/cov-report@latest
 	go install github.com/mattn/goveralls@latest
 	go install github.com/effective-security/xpki/cmd/hsm-tool@latest

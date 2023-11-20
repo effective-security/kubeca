@@ -63,7 +63,7 @@ jobs:
       - name: Docker kubeca meta
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: meta_kubeca
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -90,7 +90,7 @@ jobs:
       - name: Docker kubecertinit meta
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: meta_kubecertinit
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |

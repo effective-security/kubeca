@@ -3,11 +3,13 @@ package controller
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/effective-security/porto/xhttp/marshal"
 	"github.com/effective-security/xlog"
 	"github.com/effective-security/xpki/authority"
 	csrapi "github.com/effective-security/xpki/csr"
+	"github.com/effective-security/xpki/metricskey"
 	"github.com/effective-security/xpki/x/print"
 	"github.com/pkg/errors"
 	capi "k8s.io/api/certificates/v1"
@@ -67,6 +69,8 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 
 		issuer, profile := r.findIssuer(csr.Spec.SignerName)
 		if issuer != nil {
+			now := time.Now()
+
 			signReq := csrapi.SignRequest{
 				Request: string(csr.Spec.Request),
 				Profile: profile,
@@ -81,7 +85,13 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 
 			b := new(strings.Builder)
 			print.Certificate(b, cert, false)
-			logger.ContextKV(ctx, xlog.NOTICE, "status", "signed", "certificate", b.String())
+			logger.ContextKV(ctx, xlog.NOTICE,
+				"status", "signed",
+				"issuer", issuer.Label(),
+				"profile", profile,
+				"elapsed", time.Since(now).String(),
+				"certificate", b.String())
+			metricskey.PerfCASignRequest.MeasureSince(now, issuer.Label(), profile)
 
 			if len(issuer.PEM()) > 0 {
 				pem := strings.TrimSpace(string(raw)) + "\n" + strings.TrimSpace(issuer.PEM())

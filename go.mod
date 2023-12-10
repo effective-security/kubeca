@@ -5,7 +5,7 @@ go 1.21.5
 require (
 	github.com/effective-security/porto v0.20.1-0.20231209121817-4c9dbf219085
 	github.com/effective-security/xlog v0.6.1-0.20231117065932-e993e47f2aa3
-	github.com/effective-security/xpki v0.13.1-0.20231209120230-a35f92e2e85e
+	github.com/effective-security/xpki v0.14.1-0.20231210145928-ad7d18414053
 	github.com/go-logr/logr v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
@@ -37,6 +37,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/effective-security/metrics v0.2.1-0.20231117075147-3686848ff7a6 // indirect
 	github.com/effective-security/x v0.1.1-0.20231127132411-787e96263399 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect

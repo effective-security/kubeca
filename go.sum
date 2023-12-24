@@ -56,8 +56,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/effective-security/metrics v0.2.1-0.20231117075147-3686848ff7a6 h1:APf8pNi62nLIcCKLegXRI61BhxOBOraYb92v6QdQ2mo=
 github.com/effective-security/metrics v0.2.1-0.20231117075147-3686848ff7a6/go.mod h1:UfXr5PjeNRJoPR3znLmuv1cFZYH25ylzbwU3SL2WJbM=
-github.com/effective-security/porto v0.20.1-0.20231209121817-4c9dbf219085 h1:SKaouEBr3ixuwsALLK2lymOoWMcnQMaUpbgj/mWEriU=
-github.com/effective-security/porto v0.20.1-0.20231209121817-4c9dbf219085/go.mod h1:Lk1LZQqrpwT7qTnUMqwm6XZB+NT91T0SoKYuccXksGQ=
+github.com/effective-security/porto v0.21.0 h1:gYOt/boMaRNDYIlOo9sAASJMhfS92Q/NEF3itpfWlGc=
+github.com/effective-security/porto v0.21.0/go.mod h1:NKoou1xTF5xDqcYGQ25WYiSYTypQUvFztcIjA3Fo/dc=
 github.com/effective-security/x v0.1.1-0.20231213103727-26a6f8d87418 h1:HA1bw/r1gNBvASQCK87edt+fYRvRT1tZwkSAljWwI4Y=
 github.com/effective-security/x v0.1.1-0.20231213103727-26a6f8d87418/go.mod h1:wHRaKbemRp0dqUz+HDMSDWM1dW+J3tTYR+MO1xMVKW4=
 github.com/effective-security/xlog v0.6.1-0.20231117065932-e993e47f2aa3 h1:e7pbMvKz/LyYGCsPpZP9OaWUzcYU42qxH3iKN5Xv8Qg=

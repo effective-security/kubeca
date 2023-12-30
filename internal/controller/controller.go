@@ -8,6 +8,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	// +kubebuilder:scaffold:imports
+	"github.com/effective-security/kubeca/internal/logr"
 	"github.com/effective-security/xlog"
 	"github.com/effective-security/xpki/authority"
 	"github.com/effective-security/xpki/cryptoprov"
@@ -44,6 +45,7 @@ func StartCertificateSigningRequestController(f *CertificateSigningRequestContro
 		},
 		LeaderElection:   f.EnableLeaderElection,
 		LeaderElectionID: f.LeaderElectionID,
+		Logger:           logr.New(logger),
 	})
 	if err != nil {
 		logger.KV(xlog.ERROR,

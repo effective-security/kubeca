@@ -3,9 +3,9 @@ module github.com/effective-security/kubeca
 go 1.21.5
 
 require (
-	github.com/effective-security/porto v0.21.1-0.20231228170538-1db75a71314b
-	github.com/effective-security/xlog v0.6.1-0.20231117065932-e993e47f2aa3
-	github.com/effective-security/xpki v0.15.1-0.20231228162539-27062172b411
+	github.com/effective-security/porto v0.22.0
+	github.com/effective-security/xlog v0.7.0
+	github.com/effective-security/xpki v0.15.1-0.20231231113631-8fd430fe74bf
 	github.com/go-logr/logr v1.4.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4

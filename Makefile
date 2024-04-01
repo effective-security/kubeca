@@ -31,7 +31,7 @@ tools:
 	go install github.com/mattn/goveralls@latest
 	go install github.com/effective-security/xpki/cmd/hsm-tool@latest
 	go install github.com/effective-security/xpki/cmd/xpki-tool@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57
 
 folders:
 

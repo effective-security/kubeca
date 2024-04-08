@@ -4,7 +4,7 @@ go 1.22.1
 
 require (
 	github.com/effective-security/porto v0.25.560-0.20240401095242-f92e6d14621d
-	github.com/effective-security/xlog v0.8.79
+	github.com/effective-security/xlog v0.8.81
 	github.com/effective-security/xpki v0.18.382-0.20240401094527-197e4bbdcdcb
 	github.com/go-logr/logr v1.4.1
 	github.com/pkg/errors v0.9.1

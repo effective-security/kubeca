@@ -9,15 +9,28 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    groups:
+      aws:
+        patterns:
+          - github.com/aws/*
+      es:
+        patterns:
+          - github.com/effective-security*
+      go:
+        patterns:
+          - golang.org*
+      google:
+        patterns:
+          - google.golang.org*
   # Enable version updates for Actions
   - package-ecosystem: "github-actions"
     directory: "/" # Location of package manifests
     schedule:
-      interval: "monthly"
+      interval: "weekly"
   # Enable version updates for Docker
   - package-ecosystem: "docker"
     # Look for a `Dockerfile` in the `root` directory
     directory: "/"
     # Check for updates once a week
     schedule:
-      interval: "monthly"
+      interval: "weekly"

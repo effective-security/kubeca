@@ -6,7 +6,7 @@ require (
 	github.com/effective-security/porto v0.27.261
 	github.com/effective-security/xlog v0.9.39
 	github.com/effective-security/xpki v0.19.158
-	github.com/go-logr/logr v1.4.1
+	github.com/go-logr/logr v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
 	k8s.io/api v0.30.0

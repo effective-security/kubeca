@@ -109,7 +109,7 @@ jobs:
       - name: Docker kubeca docker_build_kubecertinit
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.actor != 'dependabot[bot]'
         id: docker_build_kubeca
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           file: ./Dockerfile.kubeca
           context: .
@@ -136,7 +136,7 @@ jobs:
       - name: Docker kubecertinit build
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: docker_build_kubecertinit
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           file: ./Dockerfile.kubecertinit
           context: .

@@ -22,6 +22,9 @@ updates:
       google:
         patterns:
           - google.golang.org*
+      k8s.io:
+        patterns:
+          - "*k8s.io/*"
   # Enable version updates for Actions
   - package-ecosystem: "github-actions"
     directory: "/" # Location of package manifests

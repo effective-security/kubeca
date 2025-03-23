@@ -16,3 +16,6 @@ coverage.out
 change_log.txt
 etc/dev/sql-conn-*
 vendor/
+
+# generated
+internal/version/current.go

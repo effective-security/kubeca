@@ -50,12 +50,12 @@ var usages = map[string][]capi.KeyUsage{
 func (r *Request) requestCertificate(ctx context.Context, client MinCertificates) error {
 	issuerAndProfile := strings.Split(r.SignerName, "/")
 	if len(issuerAndProfile) != 2 {
-		return errors.Errorf("unsupported signer: " + r.SignerName)
+		return errors.New("unsupported signer: " + r.SignerName)
 	}
 
 	profileUsages := usages[issuerAndProfile[1]]
 	if profileUsages == nil {
-		return errors.Errorf("unsupported profile: " + r.SignerName)
+		return errors.New("unsupported profile: " + r.SignerName)
 	}
 
 	prov := csr.NewProvider(inmemcrypto.NewProvider())
@@ -125,7 +125,7 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				// If the request got deleted, waiting won't help.
-				return errors.Errorf("certificate signing request not found: " + certificateSigningRequestName)
+				return errors.New("certificate signing request not found: " + certificateSigningRequestName)
 			}
 			logger.ContextKV(ctx, xlog.ERROR, "status", "unable to retrieve certificate signing request",
 				"name", certificateSigningRequestName,

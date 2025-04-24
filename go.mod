@@ -1,6 +1,6 @@
 module github.com/effective-security/kubeca
 
-go 1.24.1
+go 1.24.2
 
 require (
 	github.com/effective-security/porto v0.32.315

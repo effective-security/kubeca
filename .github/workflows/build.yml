@@ -176,7 +176,7 @@ jobs:
         # been found) 'paths_result' outputs an empty object ('{}'). This can be easily intercepted in the if condition of a job
         # by checking the result of the "global" 'should_skip' output first.
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.version-changed.outputs.should_skip != 'true' && !fromJSON(steps.version-changed.outputs.paths_result).version.should_skip
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const {DIST_VERSION} = process.env          

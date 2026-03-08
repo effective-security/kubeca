@@ -84,7 +84,7 @@ func StartCertificateSigningRequestController(f *CertificateSigningRequestContro
 		//Log:           ctrl.Log.WithName(controllerName),
 		Scheme:        mgr.GetScheme(),
 		Authority:     ca,
-		EventRecorder: mgr.GetEventRecorderFor(controllerName),
+		EventRecorder: mgr.GetEventRecorderFor(controllerName), // nolint:staticcheck
 	}).SetupWithManager(mgr); err != nil {
 		logger.KV(xlog.ERROR,
 			"reason", "unable to create Controller",

@@ -193,5 +193,5 @@ func getNamesForPod(ctx context.Context, client MinServices, pod v1.Pod, cluster
 }
 
 func ipToName(ip string) string {
-	return strings.Replace(ip, ".", "-", -1)
+	return strings.ReplaceAll(ip, ".", "-")
 }

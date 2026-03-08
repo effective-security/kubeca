@@ -37,7 +37,7 @@ type CertificateSigningRequestSigningReconciler struct {
 func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logger.WithValues("ns", req.NamespacedName)
 	var csr capi.CertificateSigningRequest
-	if err := r.Client.Get(ctx, req.NamespacedName, &csr); client.IgnoreNotFound(err) != nil {
+	if err := r.Get(ctx, req.NamespacedName, &csr); client.IgnoreNotFound(err) != nil {
 		return ctrl.Result{}, errors.WithMessagef(err, "error getting CSR")
 	}
 	json, _ := marshal.EncodeBytes(marshal.PrettyPrint, csr)

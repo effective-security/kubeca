@@ -54,7 +54,7 @@ func TestCreate(t *testing.T) {
 		IncludeUnqualified: true,
 		SignerName:         "kubeca.svc/peer",
 	}
-	os.RemoveAll(r.CertDir)
+	_ = os.RemoveAll(r.CertDir)
 
 	p := mockedPods{}
 	s := mockedServices{}
@@ -95,7 +95,7 @@ func TestCreate(t *testing.T) {
 	assert.Equal(t, "unable to save key: open /tmp/tests/certinit/tls.key: no such file or directory", err.Error())
 
 	_ = os.MkdirAll(r.CertDir, 0755)
-	defer os.RemoveAll(r.CertDir)
+	defer func() { _ = os.RemoveAll(r.CertDir) }()
 
 	err = r.Create(context.Background(), mocked)
 	require.NoError(t, err)

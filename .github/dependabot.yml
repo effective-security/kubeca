@@ -27,9 +27,13 @@ updates:
           - "*k8s.io/*"
   # Enable version updates for Actions
   - package-ecosystem: "github-actions"
-    directory: "/" # Location of package manifests
+    directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
   # Enable version updates for Docker
   - package-ecosystem: "docker"
     # Look for a `Dockerfile` in the `root` directory

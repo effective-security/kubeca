@@ -61,7 +61,7 @@ func main() {
 	} else {
 		formatter = xlog.NewJSONFormatter(os.Stderr)
 	}
-	formatter.Options(xlog.FormatWithCaller)
+	formatter.Options(xlog.FormatWithCaller(true))
 	xlog.SetFormatter(formatter)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debugLogging)))

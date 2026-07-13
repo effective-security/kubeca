@@ -120,8 +120,8 @@ github.com/effective-security/xdb v0.24.149 h1:J3ZPWEV6/A1zi6MKh/a4qFFFSXm/AGmeG
 github.com/effective-security/xdb v0.24.149/go.mod h1:dolJd3c+lpz7lff8zeZVNnPlWJ+5ZrTWJ7F6NhPSqpY=
 github.com/effective-security/xlog v0.11.57 h1:Pm9/NPpH1nfpne0WZFslCD1ihEimxkiH+mQJktlzRao=
 github.com/effective-security/xlog v0.11.57/go.mod h1:CTzccWAyvK2EX6N+wsvq3a4+i+ziid4v9sNHWiAT3z0=
-github.com/effective-security/xpki v0.27.273 h1:wVXLXpMxJCONwxLOMGi0a2mXa9+5DV2ZqCtd+BDcJdI=
-github.com/effective-security/xpki v0.27.273/go.mod h1:rR8f4Fn87u5D3wloblcH4JbLjPrDT9fTUtjsxggQGxc=
+github.com/effective-security/xpki v0.27.275 h1:750TvnZ7nHM78wNK3YOcSlFDZmhiT7mYK7KDGbiRl9U=
+github.com/effective-security/xpki v0.27.275/go.mod h1:rV0iGD0/QpsWXiKrfS9gqVZGA8EMEwAATgtPYW8sGGM=
 github.com/emicklei/go-restful/v3 v3.13.0 h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes=
 github.com/emicklei/go-restful/v3 v3.13.0/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/envoyproxy/go-control-plane v0.14.0 h1:hbG2kr4RuFj222B6+7T83thSPqLjwBIfQawTkC++2HA=

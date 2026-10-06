@@ -1,0 +1,21 @@
+# local-kms emulators for the key ceremony and the minikube test
+# (`make start-local-kms`): kms1 holds the root CA key (the "offline" KMS in a
+# real ceremony), kms2 the issuing CA key that kubeca uses. The ports match
+# etc/aws-dev-kms-local1.yaml and etc/aws-dev-kms-local2.yaml; the minikube
+# deployment reaches kms2 through host.minikube.internal. Keys live in memory:
+# recreating a container empties it, and every certificate issued with its
+# keys must be regenerated (`make kubeca-ceremony-local`).
+services:
+  kms1:
+    image: nsmithuk/local-kms:3.11.7
+    ports:
+      - "14599:14599" # root CA KMS
+    environment:
+      - PORT=14599
+
+  kms2:
+    image: nsmithuk/local-kms:3.11.7
+    ports:
+      - "24599:24599" # issuing CA KMS
+    environment:
+      - PORT=24599

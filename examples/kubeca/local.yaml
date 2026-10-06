@@ -1,0 +1,12 @@
+command:
+  - /app/kubeca
+  - -debug
+  - -ca-cfg=/kubeca/etc/ca-config.kubeca.yaml
+  - -hsm-cfg=/kubeca/etc/aws-dev-kms-local.yaml
+  #- -stackdriver
+
+config:
+  common:
+    AWS_DEFAULT_REGION: "us-west-2"
+    AWS_ACCESS_KEY_ID: notusedbyemulator
+    AWS_SECRET_ACCESS_KEY: notusedbyemulator

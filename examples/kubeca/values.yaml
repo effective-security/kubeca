@@ -1,0 +1,75 @@
+image:
+  repository: effectivesecurity/kubeca
+  tag: sha-225d04f
+  pullPolicy: Always
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podSecurityContext:
+  #runAsNonRoot: true
+  fsGroup: 1000
+  #runAsUser: 9000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+
+#  readOnlyRootFilesystem: true
+#  runAsNonRoot: true
+#  runAsUser: 9000
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 85
+
+replicaCount:
+  default: 1
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: kubeca
+
+# The config files are the ones under etc/, mounted at /kubeca/etc; the
+# binary's own defaults name different files.
+command:
+  - /app/kubeca
+  - -ca-cfg=/kubeca/etc/ca-config.kubeca.yaml
+  - -hsm-cfg=/kubeca/etc/aws-kms-us-west-2.yaml
+
+resources:
+  requests:
+    memory: "500Mi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "2200m"
+
+nodeSelector:
+  default: {}
+
+tolerations:
+  default: []
+
+affinity:
+  default: {}
+
+config:
+  common:
+    AWS_DEFAULT_REGION: "us-west-2"
+
+issuers:
+  kubeca:
+    cert: /kubeca/certs/kubeca_ca_g1.pem
+    key: /kubeca/certs/kubeca_ca_g1.key
+    ca_bundle:
+    root_bundle: /kubeca/certs/kubeca_root.pem

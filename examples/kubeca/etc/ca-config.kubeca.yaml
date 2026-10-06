@@ -1,0 +1,146 @@
+---
+# Rendered through Helm `tpl`: {{ "{{ .Values.* }}" }} references resolve at
+# install time. Service account: {{ .Values.serviceAccount.name }}
+#
+# xpki v1.0 rules that apply to the CSRs kubecertinit creates:
+# - The CSR is untrusted. Its subject and SAN names are copied only as
+#   `allowed_fields` permits and only when they match `allowed_names`,
+#   `allowed_dns`, `allowed_uri` and `allowed_email` (when set).
+# - CSR extensions are copied only when listed in `allowed_extensions`; an
+#   empty list allows none. SAN (2.5.29.17), key usage, EKU, basic
+#   constraints, SKI, AKI and OCSP no-check always come from the profile, so
+#   listing them has no effect. kubecertinit sends no other extension.
+# - An invalid or duplicate SAN fails the request instead of being issued.
+authority:
+  issuers:
+    - # Issuer label: the part of a signerName before the slash
+      # (`kubeca.svc/peer`).
+      label: kubeca.svc
+      # type: tls|codesign|timestamp|ocsp|spiffe
+      type: tls
+      cert: "{{ .Values.issuers.kubeca.cert }}"
+      key: "{{ .Values.issuers.kubeca.key }}"
+      # location of the CA bundle file
+      ca_bundle: "{{ .Values.issuers.kubeca.ca_bundle }}"
+      # location of the Root CA file
+      root_bundle: "{{ .Values.issuers.kubeca.root_bundle }}"
+      aia:
+        # No AIA or OCSP
+        issuer_url:
+        crl_url:
+        ocsp_url:
+      # When populated, the issuer serves only the listed profiles
+      # (XPKI-057). Empty serves every profile with this issuer_label.
+      # allowed_profiles: [peer, server, client]
+
+# Profile fields (github.com/effective-security/xpki/authority.CertProfile):
+#
+# issuer_label: string           issuer that serves the profile
+# description: string
+# expiry: duration               lifetime: NotAfter = NotBefore + expiry
+# backdate: duration             NotBefore = now (to the minute) - backdate; default 5m
+# usages: []string               key usages and extended key usages
+# ocsp_no_check: bool
+# extensions: []                 extensions added to every certificate
+# allowed_extensions: []string   CSR extension OIDs that may be copied; empty: none
+# allowed_names: regex           subject CommonName
+# allowed_dns: regex
+# allowed_email: regex
+# allowed_uri: regex
+# allowed_fields:                CSR fields that may be copied; absent: all
+#   subject: bool
+#   dns: bool
+#   ip: bool
+#   email: bool
+#   uri: bool
+# policies: []
+#   oid:
+#   qualifiers:
+# ca_constraint:
+#   is_ca:
+#   max_path_len:
+#
+# The profile name is the part of a signerName after the slash
+# (`kubeca.svc/peer`). kubecertinit has built-in Kubernetes key usages for
+# peer, server and client; request any other profile with -usages.
+profiles:
+  peer:
+    issuer_label: kubeca.svc
+    expiry: 8760h
+    backdate: 30m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+      - client auth
+    #allowed_uri: ^spiffe://secdi/.*$
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  peer-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+      - client auth
+    #allowed_uri: ^spiffe://secdi/.*$
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  server:
+    issuer_label: kubeca.svc
+    expiry: 8760h
+    backdate: 30m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  server-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  client:
+    issuer_label: kubeca.svc
+    expiry: 8760h
+    backdate: 30m
+    usages:
+      - signing
+      - key encipherment
+      - client auth
+    #allowed_uri: ^spiffe://secdi/.*$
+    allowed_fields:
+      uri: true
+
+  client-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - client auth
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true

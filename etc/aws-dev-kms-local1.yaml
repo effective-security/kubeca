@@ -1,0 +1,4 @@
+---
+manufacturer: AWSKMS
+model: effective-security-test
+attributes: Endpoint=http://localhost:14599,Region=us-west-2

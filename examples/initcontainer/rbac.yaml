@@ -1,0 +1,61 @@
+# RBAC for a workload that runs kubecertinit as an init container.
+# CertificateSigningRequests are cluster-scoped, so that right needs a
+# ClusterRole and a ClusterRoleBinding. The Pod and Service reads that
+# -query-k8s needs stay inside the workload's namespace (Role + RoleBinding).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: shop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeca:csr-creator
+rules:
+  - apiGroups: [certificates.k8s.io]
+    resources: [certificatesigningrequests]
+    verbs: [create, get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shop-web:csr-creator
+subjects:
+  - kind: ServiceAccount
+    name: web
+    namespace: shop
+roleRef:
+  kind: ClusterRole
+  name: kubeca:csr-creator
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubeca:pod-names
+  namespace: shop
+rules:
+  - apiGroups: [""]
+    resources: [pods, services]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: web:pod-names
+  namespace: shop
+subjects:
+  - kind: ServiceAccount
+    name: web
+    namespace: shop
+roleRef:
+  kind: Role
+  name: kubeca:pod-names
+  apiGroup: rbac.authorization.k8s.io

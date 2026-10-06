@@ -1,0 +1,10 @@
+command:
+  - /app/kubeca
+  - -debug
+  - -ca-cfg=/kubeca/etc/ca-config.kubeca.yaml
+  - -hsm-cfg=/kubeca/etc/aws-kms-us-west-2.yaml
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::{myaccount}:role/{cluster}-dev-kubeca

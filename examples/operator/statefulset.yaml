@@ -1,0 +1,78 @@
+# StatefulSet with one shared certificate. Kubernetes cannot template a
+# per-ordinal secretName, so the replicas share the Secret `db-tls` whose
+# certificate covers every Pod DNS name of the headless Service with a
+# wildcard (`*.db.shop.svc.cluster.local`), the Service name and the
+# ServiceAccount's SPIFFE ID. Per-Pod identity (Pod IP, one key per Pod)
+# needs the webhook flow in deployment-injected.yaml.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: db
+  namespace: shop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: shop
+spec:
+  clusterIP: None
+  selector:
+    app: db
+  ports:
+    - name: sql
+      port: 5432
+---
+apiVersion: kubeca.effectivesecurity/v1alpha1
+kind: Certificate
+metadata:
+  name: db-tls
+  namespace: shop
+spec:
+  issuerRef:
+    name: kubeca
+  profile: peer-24h
+  secretName: db-tls
+  dnsNames:
+    - db.shop.svc.cluster.local
+    - db.shop.svc
+    - "*.db.shop.svc.cluster.local"
+    - "*.db.shop.svc"
+    - localhost
+  uris:
+    - spiffe://example.org/ns/shop/sa/db
+  duration: 24h
+  renewBefore: 8h
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: shop
+spec:
+  serviceName: db
+  replicas: 3
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      serviceAccountName: db
+      volumes:
+        - name: tls
+          secret:
+            secretName: db-tls
+      containers:
+        - name: db
+          image: example/db:latest
+          ports:
+            - name: sql
+              containerPort: 5432
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true

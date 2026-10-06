@@ -1,0 +1,77 @@
+# Dummy workload for the minikube test: a busybox container that only sleeps,
+# with the kubecertinit init container requesting a certificate for the Pod.
+# Needs examples/initcontainer/rbac.yaml (namespace shop, ServiceAccount web).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: shop
+spec:
+  selector:
+    app: web
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: web
+      volumes:
+        - name: tls
+          emptyDir:
+            medium: Memory
+      initContainers:
+        - name: certificate-init
+          image: effectivesecurity/kubecertinit:main
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args:
+            - -namespace=$(NAMESPACE)
+            - -pod-name=$(POD_NAME)
+            - -signer=kubeca.svc/peer
+            - -cert-dir=/etc/tls
+            - -cluster-domain=cluster.local
+            - -query-k8s
+            - -include-unqualified
+            - -san=spiffe://cluster.local/ns/$(NAMESPACE)/sa/web,localhost,$(POD_IP)
+            - -labels=app=web
+            - -timeout=5m
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+      containers:
+        - name: web
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "ls -l /etc/tls && sleep infinity"]
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true

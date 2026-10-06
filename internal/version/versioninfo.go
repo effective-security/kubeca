@@ -16,45 +16,16 @@ type Info struct {
 	flt     float32
 }
 
-// PopulateFromBuild will parse the major/minor values from the build string
-// the build string is expected to be in the format
-// major.minor-commit
-// and can be populated from git using
-//
-//	GIT_VERSION := $(shell git describe --dirty --always --tags --long)
-//
-// and then using gofmt to substitute it into a template
+// PopulateFromBuild parses the major, minor and commit values from Build,
+// which is expected in the format [v]major.minor.commit[-dirty]; make build
+// links it in from GIT_VERSION (see current.go). Values that do not match
+// stay zero; it never panics, since a plain go build reports a module
+// version or "devel".
 func (v *Info) PopulateFromBuild() {
-	bld := strings.Split(v.Build, "-")[0]
-
-	_, err := fmt.Sscanf(bld, "v%d.%d.%d", &v.Major, &v.Minor, &v.Commit)
-	if err != nil {
-		panic(fmt.Sprintf("Unable to parse version string %s: %v", v.Build, err))
-	}
-	_, err = fmt.Sscanf(bld, "v%f.", &v.flt)
-	if err != nil {
-		panic(fmt.Sprintf("Unable to parse version string %s: %v", v.Build, err))
-	}
-
-	var fCommit float32
-	switch {
-	case v.Commit > 1000000:
-		fCommit = 0.0000001 * float32(v.Commit)
-	case v.Commit > 100000:
-		fCommit = 0.000001 * float32(v.Commit)
-	case v.Commit > 10000:
-		fCommit = 0.00001 * float32(v.Commit)
-	case v.Commit > 1000:
-		fCommit = 0.0001 * float32(v.Commit)
-	case v.Commit > 100:
-		fCommit = 0.001 * float32(v.Commit)
-	case v.Commit > 10:
-		fCommit = 0.01 * float32(v.Commit)
-	case v.Commit > 1:
-		fCommit = 0.1 * float32(v.Commit)
-	}
-
-	v.flt = v.flt*100 + fCommit
+	build := strings.TrimPrefix(v.Build, "v")
+	_, _ = fmt.Sscanf(build, "%d.%d.%d", &v.Major, &v.Minor, &v.Commit)
+	_, _ = fmt.Sscanf(build, "%f-", &v.flt)
+	v.flt = v.flt*1000000 + float32(v.Commit)
 	v.Runtime = runtime.Version()
 }
 
@@ -74,9 +45,11 @@ func (v Info) GreaterOrEqual(than Info) bool {
 	return v.Minor >= than.Minor
 }
 
-// Float returns the version Major/Minor as a float Major.Minor
-// e.g. given Major:3 Minor:52001, it'll return 3.52001
-// this is only valid if PopulateFromBuild has been called.
+// Float returns the version as one float32 for ordering: Major.Minor
+// scaled by 1e6 plus Commit, so v1.2.114 gives 1200114 (the encoding of
+// xpki's internal/version). It is lossy (v1.2.x and v1.20.x collide) and
+// zero until PopulateFromBuild has parsed Build; nothing in this module
+// calls it.
 func (v Info) Float() float32 {
 	return v.flt
 }

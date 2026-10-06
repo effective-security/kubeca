@@ -17,5 +17,5 @@ change_log.txt
 etc/dev/sql-conn-*
 vendor/
 
-# generated
-internal/version/current.go
+INTENT.md
+PR_REVIEW.md

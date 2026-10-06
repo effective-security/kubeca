@@ -1,0 +1,24 @@
+---
+profiles:
+  ROOT:
+    expiry: 219150h # 25 years
+    backdate: 30m
+    usages:
+      - cert sign
+      - crl sign
+      - digital signature
+    ca_constraint:
+      is_ca: true
+      max_path_len: -1
+
+  L1_CA:
+    issuer_label: ROOT
+    expiry: 43800h # 5 years
+    backdate: 30m
+    usages:
+      - cert sign
+      - crl sign
+      - digital signature
+    ca_constraint:
+      is_ca: true
+      max_path_len: 0

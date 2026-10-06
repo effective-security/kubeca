@@ -1,0 +1,75 @@
+# xpki CA configuration for the operator: short-lived profiles next to the
+# existing ones. Drop-in for examples/kubeca/etc/ca-config.kubeca.yaml once the
+# operator ships; the init-container profiles can stay during migration.
+#
+# backdate stays at the 5m default: the operator sets NotBefore = now − backdate
+# and NotAfter = NotBefore + duration, so the usable lifetime is duration − backdate.
+---
+authority:
+  issuers:
+    - label: kubeca.svc
+      type: tls
+      cert: "{{ .Values.issuers.kubeca.cert }}"
+      key: "{{ .Values.issuers.kubeca.key }}"
+      ca_bundle: "{{ .Values.issuers.kubeca.ca_bundle }}"
+      root_bundle: "{{ .Values.issuers.kubeca.root_bundle }}"
+      aia:
+        issuer_url:
+        crl_url:
+        ocsp_url:
+
+profiles:
+  peer-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+      - client auth
+    allowed_uri: ^spiffe://example\.org/ns/[a-z0-9-]+/sa/[a-z0-9-]+$
+    allowed_dns: ^([a-z0-9-]+\.)+(svc|pod)(\.cluster\.local)?$|^localhost$
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  server-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+    allowed_dns: ^([a-z0-9-]+\.)+(svc|pod)(\.cluster\.local)?$|^localhost$
+    allowed_fields:
+      uri: true
+      dns: true
+      ip: true
+
+  client-24h:
+    issuer_label: kubeca.svc
+    expiry: 24h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - client auth
+    allowed_uri: ^spiffe://example\.org/ns/[a-z0-9-]+/sa/[a-z0-9-]+$
+    allowed_fields:
+      uri: true
+
+  # Serving certificate of the operator's own mutating webhook (D-6).
+  webhook:
+    issuer_label: kubeca.svc
+    expiry: 168h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+    allowed_dns: ^kubeca-webhook\.kubeca\.svc(\.cluster\.local)?$
+    allowed_fields:
+      dns: true

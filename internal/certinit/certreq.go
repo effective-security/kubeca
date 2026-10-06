@@ -17,17 +17,35 @@ import (
 	"github.com/effective-security/xpki/x/print"
 	"github.com/pkg/errors"
 	capi "k8s.io/api/certificates/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	randAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	randAlphabet            = "0123456789abcdefghijklmnopqrstuvwxyz"
+	requestNameSuffixLength = 5
+
+	// pollInterval is the delay between reads of the CSR while waiting for
+	// the certificate.
+	pollInterval = 5 * time.Second
+
+	keyFileName  = "tls.key"
+	csrFileName  = "tls.csr"
+	certFileName = "tls.crt"
+
+	// TODO: for 0600 the POD got access denied (KUBECA-003)
+	keyFileMode  = 0644
+	fileMode     = 0644
+	keyAlgorithm = "ECDSA"
+	keySize      = 256
 )
 
 var (
 	randAlphabetLength = big.NewInt(int64(len(randAlphabet)))
 )
 
+// usages maps a profile name to the Kubernetes key usages requested in the
+// CSR. Request.Usages overrides it for any profile.
 var usages = map[string][]capi.KeyUsage{
 	"peer": {
 		capi.UsageDigitalSignature,
@@ -47,20 +65,39 @@ var usages = map[string][]capi.KeyUsage{
 	},
 }
 
+// profileUsages returns the key usages to request: Request.Usages when set,
+// otherwise the built-in list for the profile.
+func (r *Request) profileUsages(profile string) ([]capi.KeyUsage, error) {
+	if r.Usages != "" {
+		var list []capi.KeyUsage
+		for u := range splitList(r.Usages) {
+			list = append(list, capi.KeyUsage(u))
+		}
+		if len(list) == 0 {
+			return nil, errors.New("invalid usages: " + r.Usages)
+		}
+		return list, nil
+	}
+	if list := usages[profile]; list != nil {
+		return list, nil
+	}
+	return nil, errors.New("unsupported profile: " + r.SignerName + "; set usages for a profile other than peer, server or client")
+}
+
 func (r *Request) requestCertificate(ctx context.Context, client MinCertificates) error {
 	issuerAndProfile := strings.Split(r.SignerName, "/")
 	if len(issuerAndProfile) != 2 {
 		return errors.New("unsupported signer: " + r.SignerName)
 	}
 
-	profileUsages := usages[issuerAndProfile[1]]
-	if profileUsages == nil {
-		return errors.New("unsupported profile: " + r.SignerName)
+	profileUsages, err := r.profileUsages(issuerAndProfile[1])
+	if err != nil {
+		return err
 	}
 
 	prov := csr.NewProvider(inmemcrypto.NewProvider())
 	req := csr.CertificateRequest{
-		KeyRequest: prov.NewKeyRequest("", "ECDSA", 256, csr.SigningKey),
+		KeyRequest: prov.NewKeyRequest("", keyAlgorithm, keySize, csr.SigningKey),
 		SAN:        r.san,
 	}
 
@@ -69,16 +106,15 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 		return errors.WithStack(err)
 	}
 
-	keyFile := path.Join(r.CertDir, "tls.key")
-	// TODO: for 0600 the POD got access denied
-	if err := os.WriteFile(keyFile, pemKeyBytes, 0644); err != nil {
+	keyFile := path.Join(r.CertDir, keyFileName)
+	if err := os.WriteFile(keyFile, pemKeyBytes, keyFileMode); err != nil {
 		return errors.WithMessage(err, "unable to save key")
 	}
 
 	logger.ContextKV(ctx, xlog.INFO, "status", "wrote_key", "file", keyFile)
 
-	csrFile := path.Join(r.CertDir, "tls.csr")
-	if err := os.WriteFile(csrFile, pemCsr, 0644); err != nil {
+	csrFile := path.Join(r.CertDir, csrFileName)
+	if err := os.WriteFile(csrFile, pemCsr, fileMode); err != nil {
 		return errors.WithMessage(err, "unable to save CSR")
 	}
 
@@ -100,10 +136,6 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 			Request:    pemCsr,
 			Usages:     profileUsages,
 			SignerName: r.SignerName,
-			Extra: map[string]capi.ExtraValue{
-				"issuer":  []string{issuerAndProfile[0]},
-				"profile": []string{issuerAndProfile[1]},
-			},
 		},
 	}
 
@@ -119,40 +151,9 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 		logger.ContextKV(ctx, xlog.INFO, "status", "signing request already exists")
 	}
 
-	var certificate []byte
-	for {
-		csr, err := client.Get(ctx, certificateSigningRequestName, metaV1.GetOptions{})
-		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				// If the request got deleted, waiting won't help.
-				return errors.New("certificate signing request not found: " + certificateSigningRequestName)
-			}
-			logger.ContextKV(ctx, xlog.ERROR, "status", "unable to retrieve certificate signing request",
-				"name", certificateSigningRequestName,
-				"err", err.Error(),
-			)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		certificate = csr.Status.Certificate
-		if len(certificate) > 0 {
-			logger.ContextKV(ctx, xlog.INFO, "status", "got certificate")
-			break
-		}
-
-		for _, condition := range csr.Status.Conditions {
-			if condition.Type == capi.CertificateDenied {
-				return errors.Errorf("certificate signing request (%s) denied for %q: %q", certificateSigningRequestName, condition.Reason, condition.Message)
-			}
-		}
-
-		logger.ContextKV(ctx, xlog.INFO, "status", "csr not issued",
-			"name", certificateSigningRequestName,
-			"retry", "in 5 seconds",
-		)
-
-		time.Sleep(5 * time.Second)
+	certificate, err := r.waitForCertificate(ctx, client, certificateSigningRequestName)
+	if err != nil {
+		return err
 	}
 
 	chain, err := certutil.ParseChainFromPEM(certificate)
@@ -165,8 +166,8 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 		logger.ContextKV(ctx, xlog.DEBUG, "cert", b.String())
 	}
 
-	certFile := path.Join(r.CertDir, "tls.crt")
-	if err := os.WriteFile(certFile, certificate, 0644); err != nil {
+	certFile := path.Join(r.CertDir, certFileName)
+	if err := os.WriteFile(certFile, certificate, fileMode); err != nil {
 		return errors.WithMessage(err, "unable to save certificate")
 	}
 
@@ -175,9 +176,50 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 	return nil
 }
 
+// waitForCertificate polls the CSR every pollInterval until it carries a
+// certificate, a Denied or Failed condition, is deleted, or ctx is done.
+func (r *Request) waitForCertificate(ctx context.Context, client MinCertificates, name string) ([]byte, error) {
+	for {
+		csr, err := client.Get(ctx, name, metaV1.GetOptions{})
+		switch {
+		case apierrors.IsNotFound(err):
+			// If the request got deleted, waiting won't help.
+			return nil, errors.New("certificate signing request not found: " + name)
+		case err != nil:
+			logger.ContextKV(ctx, xlog.ERROR, "status", "unable to retrieve certificate signing request",
+				"name", name,
+				"err", err.Error(),
+			)
+		case len(csr.Status.Certificate) > 0:
+			logger.ContextKV(ctx, xlog.INFO, "status", "got certificate")
+			return csr.Status.Certificate, nil
+		default:
+			for _, condition := range csr.Status.Conditions {
+				switch condition.Type {
+				case capi.CertificateDenied:
+					return nil, errors.Errorf("certificate signing request (%s) denied for %q: %q", name, condition.Reason, condition.Message)
+				case capi.CertificateFailed:
+					return nil, errors.Errorf("certificate signing request (%s) failed for %q: %q", name, condition.Reason, condition.Message)
+				}
+			}
+
+			logger.ContextKV(ctx, xlog.INFO, "status", "csr not issued",
+				"name", name,
+				"retry", "in "+pollInterval.String(),
+			)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, errors.Wrapf(ctx.Err(), "gave up waiting for certificate signing request %s", name)
+		case <-time.After(pollInterval):
+		}
+	}
+}
+
 func (r *Request) requestName() (name string) {
 	name = fmt.Sprintf("%s-%s-", r.PodName, r.Namespace)
-	for i := 0; i < 5; i++ {
+	for range requestNameSuffixLength {
 		n, err := rand.Int(rand.Reader, randAlphabetLength)
 		if err != nil {
 			logger.Panicf("failed to generate request name: %v", err)

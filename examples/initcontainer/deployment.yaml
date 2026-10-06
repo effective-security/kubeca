@@ -1,0 +1,89 @@
+# A Deployment whose Pods obtain a certificate from kubeca at start-up.
+# The init container writes tls.key, tls.csr and tls.crt into the shared
+# in-memory volume; the application reads them from /etc/tls.
+#
+# Names in the certificate: with -query-k8s the Pod's DNS name, the Service
+# names that select the Pod and their ClusterIPs; -san adds the SPIFFE URI,
+# localhost and the Pod IP. The profile's allowed_* regexes decide what is
+# accepted.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: shop
+spec:
+  selector:
+    app: web
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: web
+      volumes:
+        - name: tls
+          emptyDir:
+            medium: Memory
+      initContainers:
+        - name: certificate-init
+          image: effectivesecurity/kubecertinit:main
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args:
+            - -namespace=$(NAMESPACE)
+            - -pod-name=$(POD_NAME)
+            - -signer=kubeca.svc/peer
+            - -cert-dir=/etc/tls
+            - -cluster-domain=cluster.local
+            - -query-k8s
+            - -san=spiffe://example.org/ns/$(NAMESPACE)/sa/web,localhost,$(POD_IP)
+            - -labels=app=web
+            # exit 2 (and let the kubelet restart the init container) instead of
+            # waiting for ever when the CA does not answer
+            - -timeout=10m
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+      containers:
+        - name: web
+          image: example/web:latest
+          ports:
+            - name: https
+              containerPort: 8443
+          env:
+            - name: TLS_CERT_FILE
+              value: /etc/tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/tls/tls.key
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true

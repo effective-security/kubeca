@@ -7,19 +7,34 @@ import (
 )
 
 func TestInfo_ParseBuild(t *testing.T) {
-	v := Info{Build: "v1.2.114"}
-	v.PopulateFromBuild()
-	assert.Equal(t, uint(1), v.Major, "Major version")
-	assert.Equal(t, uint(2), v.Minor, "MajMinoror version")
-	assert.Equal(t, uint(114), v.Commit, "Commit")
-	assert.Equal(t, float32(120.114006), v.Float(), "Float")
-
-	v = Info{Build: "v1.2.114-dirty"}
-	v.PopulateFromBuild()
-	assert.Equal(t, uint(1), v.Major, "Major version")
-	assert.Equal(t, uint(2), v.Minor, "MajMinoror version")
-	assert.Equal(t, uint(114), v.Commit, "Commit")
-	assert.Equal(t, float32(120.114006), v.Float(), "Float")
+	tcases := []struct {
+		build  string
+		major  uint
+		minor  uint
+		commit uint
+		flt    float32
+	}{
+		{"v1.2.114", 1, 2, 114, 1.2*1000000 + 114},
+		{"1.2.114", 1, 2, 114, 1.2*1000000 + 114},
+		{"v1.2.114-dirty", 1, 2, 114, 1.2*1000000 + 114},
+		{"v0.7.231-host", 0, 7, 231, 0.7*1000000 + 231},
+		// a plain go build: no panic, zero values
+		{"devel", 0, 0, 0, 0},
+		{"devel-0123456789ab-dirty", 0, 0, 0, 0},
+		{"", 0, 0, 0, 0},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.build, func(t *testing.T) {
+			v := Info{Build: tc.build}
+			v.PopulateFromBuild()
+			assert.Equal(t, tc.major, v.Major, "Major")
+			assert.Equal(t, tc.minor, v.Minor, "Minor")
+			assert.Equal(t, tc.commit, v.Commit, "Commit")
+			assert.Equal(t, tc.flt, v.Float(), "Float")
+			assert.Equal(t, tc.build, v.String())
+			assert.NotEmpty(t, v.Runtime)
+		})
+	}
 }
 
 func TestInfo_GreaterOrEqual(t *testing.T) {
@@ -30,9 +45,7 @@ func TestInfo_GreaterOrEqual(t *testing.T) {
 	v20 := Info{2, 0, 3, "", "go1.5", float32(2.0*1000000 + 3)}
 	f := func(v, other Info, expected bool) {
 		act := v.GreaterOrEqual(other)
-		if act != expected {
-			t.Errorf("%v GreaterOrEqual (%v) return wrong result of %v, expecting %v", v, other, act, expected)
-		}
+		assert.Equal(t, expected, act, "%v GreaterOrEqual (%v) return wrong result", v, other)
 	}
 	f(v01, v01, true)
 	f(v02, v01, true)

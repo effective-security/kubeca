@@ -1,0 +1,26 @@
+# Values for the minikube test (scripts/minikube_deploy.sh): images loaded
+# with `minikube image load`, the issuing KMS on the host (kms2), JSON logs
+# (no -debug, which switches controller-runtime to console output).
+image:
+  repository: effectivesecurity/kubeca
+  tag: main
+  pullPolicy: IfNotPresent
+
+command:
+  - /app/kubeca
+  - -ca-cfg=/kubeca/etc/ca-config.kubeca.yaml
+  - -hsm-cfg=/kubeca/etc/aws-dev-kms-minikube.yaml
+
+config:
+  common:
+    AWS_DEFAULT_REGION: "us-west-2"
+    AWS_ACCESS_KEY_ID: notusedbyemulator
+    AWS_SECRET_ACCESS_KEY: notusedbyemulator
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "1"

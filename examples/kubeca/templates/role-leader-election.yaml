@@ -1,0 +1,46 @@
+---
+# Leader election (-enable-leader-election) takes a Lease in the release
+# namespace. Granted unconditionally; unused while leader election is off.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "kubeca.fullname" $ }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "kubeca.fullname" $ }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: "{{ include "kubeca.serviceAccountName" $ }}"
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "kubeca.fullname" $ }}-leader-election
+  apiGroup: rbac.authorization.k8s.io

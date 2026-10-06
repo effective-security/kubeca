@@ -1,0 +1,62 @@
+# The workload mounts the Secret the Certificate controller maintains. No
+# init container: the kubelet starts the Pod once the Secret exists and
+# updates the mounted files in place on every renewal (do not use subPath).
+# The application must reload tls.crt/tls.key when they change, for example
+# with porto's tlsconfig.NewKeypairReloader.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: shop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: shop
+spec:
+  selector:
+    app: web
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: web
+      volumes:
+        - name: tls
+          secret:
+            secretName: web-tls
+      containers:
+        - name: web
+          image: example/web:latest
+          ports:
+            - name: https
+              containerPort: 8443
+          env:
+            - name: TLS_CERT_FILE
+              value: /etc/tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/tls/tls.key
+            - name: TLS_CA_FILE
+              value: /etc/tls/ca.crt
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true

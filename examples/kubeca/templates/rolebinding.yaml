@@ -1,0 +1,33 @@
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "{{ printf "%s:csr-signer" (include "kubeca.serviceAccountName" $) }}"
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: "{{ include "kubeca.serviceAccountName" $ }}"
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: kubeca:csr-signer
+  apiGroup: rbac.authorization.k8s.io
+---
+# KUBECA-012: the controller never approves CSRs (KUBECA-001); this binding
+# grants a role the code does not use.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "{{ printf "%s:csr-approver" (include "kubeca.serviceAccountName" $) }}"
+  labels:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+subjects:
+  - kind: ServiceAccount
+    name: "{{ include "kubeca.serviceAccountName" $ }}"
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: kubeca:csr-approver
+  apiGroup: rbac.authorization.k8s.io

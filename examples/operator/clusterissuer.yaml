@@ -1,0 +1,30 @@
+# Binds the xpki issuer `kubeca.svc` to a policy. Cluster administrators own
+# this object; namespaces opt in with the label in namespaceSelector.
+---
+apiVersion: kubeca.effectivesecurity/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: kubeca
+spec:
+  issuerLabel: kubeca.svc
+  profiles: [peer-24h, server-24h, client-24h]
+  defaultProfile: peer-24h
+  spiffe:
+    trustDomain: example.org
+  policy:
+    namespaceSelector:
+      matchLabels:
+        kubeca.effectivesecurity/enabled: "true"
+    maxDuration: 24h
+    allowedDNSNames:
+      - ^[a-z0-9-]+\.${NAMESPACE}\.svc(\.cluster\.local)?$
+      - ^[a-z0-9-]+\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.cluster\.local)?$
+      # one wildcard label over a headless Service (StatefulSet Pod names)
+      - ^\*\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.cluster\.local)?$
+      - ^[0-9-]+\.${NAMESPACE}\.pod\.cluster\.local$
+      - ^localhost$
+    allowedURIs:
+      - ^spiffe://example\.org/ns/${NAMESPACE}/sa/[a-z0-9-]+$
+    allowIPAddresses: true
+  caBundle:
+    configMapName: kubeca-ca

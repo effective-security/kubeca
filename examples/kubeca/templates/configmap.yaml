@@ -1,0 +1,17 @@
+{{- range $name, $config := $.Values.config }}
+{{- if $config }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s" (include "kubeca.fullname" $) $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+data:
+{{- range $key, $val := $config }}
+  {{ $key }}: {{ tpl $val $ | quote }}
+{{- end }}
+
+{{- end }}
+{{- end }}

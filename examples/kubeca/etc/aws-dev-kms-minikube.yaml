@@ -1,0 +1,8 @@
+---
+# Issuing CA KMS for the minikube test: the local-kms container kms2 of
+# docker-compose.yml, reached from Pods through the host. The model must equal
+# the one used by the ceremony (etc/aws-dev-kms-local2.yaml): the key URI in
+# kubeca_ca_g1.key is resolved by manufacturer and model.
+manufacturer: AWSKMS
+model: effective-security-test
+attributes: Endpoint=http://host.minikube.internal:24599,Region=us-west-2

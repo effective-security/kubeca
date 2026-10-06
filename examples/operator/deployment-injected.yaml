@@ -1,0 +1,38 @@
+# Per-Pod certificates for Deployments: the mutating webhook sees the Pod at
+# CREATE (metadata.name is empty for generateName Pods), picks a unique
+# Secret name, records it in the secret-name annotation and injects the
+# volume and the mount. The Pod controller then creates the Certificate
+# owned by the Pod, and the kubelet starts the containers once the Secret
+# exists. Nothing TLS-related is written in the template.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        kubeca.effectivesecurity/inject: "true"
+      annotations:
+        kubeca.effectivesecurity/issuer: kubeca
+        kubeca.effectivesecurity/profile: peer-24h
+        kubeca.effectivesecurity/mount-path: /etc/tls
+        kubeca.effectivesecurity/containers: api
+        kubeca.effectivesecurity/san: localhost
+    spec:
+      serviceAccountName: api
+      containers:
+        - name: api
+          image: example/api:latest
+          ports:
+            - name: https
+              containerPort: 8443
+        - name: metrics-sidecar
+          image: example/metrics:latest

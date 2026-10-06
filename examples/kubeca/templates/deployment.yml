@@ -1,0 +1,75 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubeca.fullname" $ }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount.default | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "kubeca.selectorLabels" $ | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: kubeca
+        {{- include "kubeca.selectorLabels" $ | nindent 8 }}
+    spec:
+      serviceAccountName: "{{ include "kubeca.serviceAccountName" $ }}"
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.nodeSelector.default }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations.default }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity.default }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: kubeca
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          command: 
+            {{- toYaml $.Values.command | nindent 12 }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          {{- if $.Values.config.common }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "kubeca.fullname" $ }}-common
+          {{- end }}
+
+          volumeMounts:
+          - name: "kubeca-etc-volume"
+            mountPath: "/kubeca/etc"
+            readOnly: true
+          - name: "kubeca-certs-volume"
+            mountPath: "/kubeca/certs"
+            readOnly: true
+      volumes:
+      - name: kubeca-certs-volume
+        secret:
+          secretName: {{ include "kubeca.fullname" $ }}-certs-secret-tf
+
+      - name: kubeca-etc-volume
+        configMap:
+          name: {{ include "kubeca.fullname" $ }}-etc
+          items:
+    {{- range $path, $_ :=  $.Files.Glob  "etc/*" }}
+          - key: "{{ $path| base | replace "." "-" | replace "_" "-" }}"
+            path: "{{ $path| base }}"
+    {{- end }}

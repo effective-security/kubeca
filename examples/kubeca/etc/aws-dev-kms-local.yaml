@@ -1,0 +1,4 @@
+---
+manufacturer: AWSKMS
+model: effective-security-test
+attributes: Endpoint=http://kubeca-local-kms:4599,Region=us-west-2

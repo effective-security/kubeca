@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	capi "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,12 +34,22 @@ type CertificateSigningRequestSigningReconciler struct {
 // +kubebuilder:rbac:groups=certificates.k8s.io,resources=certificatesigningrequests/status,verbs=patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
+const (
+	eventReasonSigned        = "Signed"
+	eventReasonSigningFailed = "SigningFailed"
+)
+
 // Reconcile implementation
 func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := logger.WithValues("ns", req.NamespacedName)
+	// CSRs are cluster-scoped: the name identifies the object.
+	logger := logger.WithValues("name", req.Name)
 	var csr capi.CertificateSigningRequest
-	if err := r.Get(ctx, req.NamespacedName, &csr); client.IgnoreNotFound(err) != nil {
-		return ctrl.Result{}, errors.WithMessagef(err, "error getting CSR")
+	if err := r.Get(ctx, req.NamespacedName, &csr); err != nil {
+		if apierrors.IsNotFound(err) {
+			// deleted between the event and the reconcile
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, errors.WithMessage(err, "error getting CSR")
 	}
 	json, _ := marshal.EncodeBytes(marshal.PrettyPrint, csr)
 
@@ -77,20 +88,26 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 			}
 			cert, raw, err := issuer.Sign(signReq)
 			if err != nil {
+				// KUBECA-013: every Sign error is retried with backoff; a policy
+				// rejection never sets the Failed condition. The event makes the
+				// failure visible on the CSR.
 				logger.ContextKV(ctx, xlog.ERROR,
 					"reason", "unable to sign",
 					"err", err)
-				return ctrl.Result{}, errors.WithMessagef(err, "failed to sign CSR")
+				r.EventRecorder.Event(&csr, v1.EventTypeWarning, eventReasonSigningFailed, err.Error())
+				return ctrl.Result{}, errors.WithMessage(err, "failed to sign CSR")
 			}
 
-			b := new(strings.Builder)
-			print.Certificate(b, cert, false)
 			logger.ContextKV(ctx, xlog.NOTICE,
 				"status", "signed",
 				"issuer", issuer.Label(),
 				"profile", profile,
-				"elapsed", time.Since(now).String(),
-				"certificate", b.String())
+				"serial", cert.SerialNumber.String(),
+				"not_after", cert.NotAfter.UTC().Format(time.RFC3339),
+				"elapsed", time.Since(now).String())
+			b := new(strings.Builder)
+			print.Certificate(b, cert, false)
+			logger.ContextKV(ctx, xlog.DEBUG, "certificate", b.String())
 			metricskey.PerfCASignRequest.MeasureSince(now, issuer.Label(), profile)
 
 			if len(issuer.PEM()) > 0 {
@@ -105,9 +122,9 @@ func (r *CertificateSigningRequestSigningReconciler) Reconcile(ctx context.Conte
 				logger.ContextKV(ctx, xlog.ERROR,
 					"reason", "unable to patch status",
 					"err", err)
-				return ctrl.Result{}, errors.WithMessagef(err, "error patching CSR")
+				return ctrl.Result{}, errors.WithMessage(err, "error patching CSR")
 			}
-			r.EventRecorder.Event(&csr, v1.EventTypeNormal, "Signed", "The CSR has been signed")
+			r.EventRecorder.Event(&csr, v1.EventTypeNormal, eventReasonSigned, "The CSR has been signed")
 		} else {
 			logger.ContextKV(ctx, xlog.INFO, "ignoring", "issuer not found", "signer", csr.Spec.SignerName)
 		}
@@ -137,7 +154,8 @@ func (r *CertificateSigningRequestSigningReconciler) SetupWithManager(mgr ctrl.M
 // IsCertificateRequestApproved returns true if a certificate request has the
 // "Approved" condition and no "Denied" conditions; false otherwise.
 func isCertificateRequestApproved(csr *capi.CertificateSigningRequest) bool {
-	// implicitly approve
+	// implicitly approve: a CSR without a Denied condition is signed even when
+	// it has no Approved condition (KUBECA-001).
 	_, denied := getCertApprovalCondition(&csr.Status)
 	return !denied
 }

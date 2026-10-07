@@ -2,16 +2,15 @@ package certinit
 
 import (
 	"context"
-	"fmt"
-	"iter"
 	"strings"
 
+	"github.com/cockroachdb/errors"
+	"github.com/effective-security/kubeca/internal/k8snames"
 	"github.com/effective-security/xlog"
-	"github.com/pkg/errors"
 	capi "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -19,7 +18,6 @@ import (
 var logger = xlog.NewPackageLogger("github.com/effective-security/kubeca", "certinit")
 
 const (
-	listSeparator  = ","
 	labelSeparator = "="
 )
 
@@ -75,10 +73,13 @@ type MinServices interface {
 	List(ctx context.Context, opts metaV1.ListOptions) (*v1.ServiceList, error)
 }
 
-// MinCertificates is minimum Certificates interface
+// MinCertificates is minimum Certificates interface. Watch follows the
+// CSR after it is created (KUBECA-006); a Watch error falls back to
+// polling with Get.
 type MinCertificates interface {
 	Create(ctx context.Context, certificateSigningRequest *capi.CertificateSigningRequest, opts metaV1.CreateOptions) (*capi.CertificateSigningRequest, error)
 	Get(ctx context.Context, name string, opts metaV1.GetOptions) (*capi.CertificateSigningRequest, error)
+	Watch(ctx context.Context, opts metaV1.ListOptions) (watch.Interface, error)
 }
 
 // Create certificate request and wait for issuance. The wait ends when ctx
@@ -102,7 +103,7 @@ func (r *Request) Create(ctx context.Context, client *CertClient) error {
 
 	// Gather the list of labels that will be added to the CreateCertificateSigningRequest object
 	r.labelsMap = make(map[string]string)
-	for n := range splitList(r.Labels) {
+	for n := range k8snames.SplitList(r.Labels) {
 		label, value, found := strings.Cut(n, labelSeparator)
 		label, value = strings.TrimSpace(label), strings.TrimSpace(value)
 		if !found || label == "" || strings.Contains(value, labelSeparator) {
@@ -112,23 +113,24 @@ func (r *Request) Create(ctx context.Context, client *CertClient) error {
 	}
 
 	r.san = nil
+	opts := k8snames.Options{ClusterDomain: r.ClusterDomain, IncludeUnqualified: r.IncludeUnqualified}
 	if r.QueryK8s {
 		pod, err := client.Pods.Get(ctx, r.PodName, metaV1.GetOptions{})
 		if err != nil {
 			return errors.WithMessagef(err, "failed to query pod %q in namespace %q", r.PodName, r.Namespace)
 		}
-
-		r.san, err = getNamesForPod(ctx, client.Services, *pod, r.ClusterDomain, r.IncludeUnqualified)
+		serviceList, err := client.Services.List(ctx, metaV1.ListOptions{})
 		if err != nil {
 			return errors.WithMessagef(err, "failed to query names for pod %q in namespace %q", r.PodName, r.Namespace)
 		}
+		r.san = k8snames.ForPod(pod, serviceList.Items, opts).All()
 	}
 
-	for name := range splitList(r.ServiceNames) {
-		r.san = append(r.san, serviceNames(name, r.Namespace, r.ClusterDomain, r.IncludeUnqualified)...)
+	for name := range k8snames.SplitList(r.ServiceNames) {
+		r.san = append(r.san, k8snames.ServiceNames(name, r.Namespace, opts)...)
 	}
 
-	for s := range splitList(r.SAN) {
+	for s := range k8snames.SplitList(r.SAN) {
 		r.san = append(r.san, s)
 	}
 
@@ -157,84 +159,3 @@ func NewClient(kubeconfig, namespace string) (*CertClient, error) {
 		Certificates: c.CertificatesV1().CertificateSigningRequests(),
 	}, nil
 }
-
-// splitList yields the non-empty, trimmed items of a comma-separated list.
-func splitList(list string) iter.Seq[string] {
-	return func(yield func(string) bool) {
-		for item := range strings.SplitSeq(list, listSeparator) {
-			item = strings.TrimSpace(item)
-			if item == "" {
-				continue
-			}
-			if !yield(item) {
-				return
-			}
-		}
-	}
-}
-
-// serviceNames returns the DNS names of a Service: the cluster-qualified
-// name and, when allowUnqualified is set, the .svc name.
-func serviceNames(name, namespace, clusterDomain string, allowUnqualified bool) []string {
-	names := []string{fmt.Sprintf("%s.%s.svc.%s", name, namespace, clusterDomain)}
-	if allowUnqualified {
-		names = append(names, fmt.Sprintf("%s.%s.svc", name, namespace))
-	}
-	return names
-}
-
-// getNamesForPod returns the DNS names and IPs that a given POD is permitted to have,
-// either in its own right or by dint of matching services.
-// Does not currently pay attention to static Endpoints.
-func getNamesForPod(ctx context.Context, client MinServices, pod v1.Pod, clusterDomain string, allowUnqualified bool) (san []string, err error) {
-	// The Pod DNS name needs the IP; the status may not carry it yet.
-	if ip := pod.Status.PodIP; ip != "" {
-		san = append(san, fmt.Sprintf("%s.%s.pod.%s", ipToName(ip), pod.Namespace, clusterDomain))
-	}
-	if pod.Spec.Hostname != "" && pod.Spec.Subdomain != "" {
-		san = append(san, fmt.Sprintf("%s.%s.%s.svc.%s", pod.Spec.Hostname, pod.Spec.Subdomain, pod.Namespace, clusterDomain))
-		if allowUnqualified {
-			san = append(san, fmt.Sprintf("%s.%s.%s.svc", pod.Spec.Hostname, pod.Spec.Subdomain, pod.Namespace))
-		}
-	}
-
-	podLabels := labels.Set(pod.Labels)
-
-	serviceList, err := client.List(ctx, metaV1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, service := range serviceList.Items {
-		if service.Spec.Selector == nil {
-			continue
-		}
-		selector := labels.Set(service.Spec.Selector).AsSelectorPreValidated()
-		if selector.Matches(podLabels) {
-			san = append(san, serviceNames(service.Name, service.Namespace, clusterDomain, allowUnqualified)...)
-
-			if service.Spec.Type == v1.ServiceTypeExternalName {
-				if service.Spec.ExternalName != "" {
-					san = append(san, service.Spec.ExternalName)
-				}
-			} else if ip := service.Spec.ClusterIP; ip != "" && ip != v1.ClusterIPNone {
-				// a headless Service has no address
-				san = append(san, ip)
-			}
-
-			if len(service.Spec.ExternalIPs) > 0 {
-				san = append(san, service.Spec.ExternalIPs...)
-			}
-		}
-	}
-
-	return
-}
-
-// ipToName returns the label of a Pod's DNS record (`<ip>.<ns>.pod.<domain>`):
-// every dot of an IPv4 address and every colon of an IPv6 address becomes
-// a dash, which is what CoreDNS resolves back to the address.
-func ipToName(ip string) string {
-	return podNameReplacer.Replace(ip)
-}
-
-var podNameReplacer = strings.NewReplacer(".", "-", ":", "-")

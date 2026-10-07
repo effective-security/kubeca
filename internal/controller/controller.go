@@ -1,107 +1,55 @@
 package controller
 
 import (
-	capi "k8s.io/api/certificates/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
-	// +kubebuilder:scaffold:imports
-	"github.com/effective-security/kubeca/internal/logr"
+	"github.com/cockroachdb/errors"
 	"github.com/effective-security/xlog"
 	"github.com/effective-security/xpki/authority"
 	"github.com/effective-security/xpki/cryptoprov"
 )
 
-var (
-	scheme = runtime.NewScheme()
-	logger = xlog.NewPackageLogger("github.com/effective-security/kubeca", "controller")
+var logger = xlog.NewPackageLogger("github.com/effective-security/kubeca", "controller")
+
+// ApproveMode selects what the in-process approver does with a CSR that
+// has neither an Approved nor a Denied condition (KUBECA-001).
+type ApproveMode string
+
+const (
+	// ApproveOff signs every CSR of a known signer that is not Denied,
+	// without an Approved condition: the behaviour before v0.9.
+	ApproveOff ApproveMode = "off"
+	// ApproveAudit evaluates the names, logs and emits an ApprovalAudit
+	// event for a CSR that enforce would deny, and signs it anyway.
+	ApproveAudit ApproveMode = "audit"
+	// ApproveEnforce sets Approved when every name of the CSR is one the
+	// requesting ServiceAccount's Pods and Services may carry, Denied
+	// otherwise, and signs only approved CSRs.
+	ApproveEnforce ApproveMode = "enforce"
 )
 
-const controllerName = "CSRSigningReconciler"
-
-func init() {
-	_ = capi.AddToScheme(scheme)
-	_ = corev1.AddToScheme(scheme)
-	// +kubebuilder:scaffold:scheme
+// ParseApproveMode validates the value of the -approve flag.
+func ParseApproveMode(s string) (ApproveMode, error) {
+	switch mode := ApproveMode(s); mode {
+	case ApproveOff, ApproveAudit, ApproveEnforce:
+		return mode, nil
+	default:
+		return "", errors.Errorf("invalid approve mode %q: use off, audit or enforce", s)
+	}
 }
 
-// CertificateSigningRequestControllerFlags provides controller flags
-type CertificateSigningRequestControllerFlags struct {
-	MetricsAddr          string
-	EnableLeaderElection bool
-	LeaderElectionID     string
-	CaCfgPath            string
-	HsmCfgPath           string
-}
-
-// StartCertificateSigningRequestController starts controller loop
-func StartCertificateSigningRequestController(f *CertificateSigningRequestControllerFlags) error {
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: f.MetricsAddr,
-		},
-		LeaderElection:   f.EnableLeaderElection,
-		LeaderElectionID: f.LeaderElectionID,
-		Logger:           logr.New(logger),
-	})
+// LoadAuthority loads the crypto provider from the token configuration
+// and the xpki Authority from the CA configuration.
+func LoadAuthority(caCfgPath, hsmCfgPath string) (*authority.Authority, error) {
+	crypto, err := cryptoprov.Load(hsmCfgPath, nil)
 	if err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to start manager",
-			"err", err)
-		return err
+		return nil, errors.WithMessagef(err, "unable to load HSM config %s", hsmCfgPath)
 	}
-
-	crypto, err := cryptoprov.Load(f.HsmCfgPath, nil)
+	caCfg, err := authority.LoadConfig(caCfgPath)
 	if err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to load HSM config",
-			"config", f.HsmCfgPath,
-			"err", err)
-		return err
+		return nil, errors.WithMessagef(err, "unable to load CA config %s", caCfgPath)
 	}
-
-	caCfg, err := authority.LoadConfig(f.CaCfgPath)
-	if err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to load CA config",
-			"config", f.CaCfgPath,
-			"err", err)
-		return err
-	}
-
 	ca, err := authority.NewAuthority(caCfg, crypto)
 	if err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to create CA",
-			"err", err)
-		return err
+		return nil, errors.WithMessage(err, "unable to create CA")
 	}
-	if err := (&CertificateSigningRequestSigningReconciler{
-		Client: mgr.GetClient(),
-		//Log:           ctrl.Log.WithName(controllerName),
-		Scheme:        mgr.GetScheme(),
-		Authority:     ca,
-		EventRecorder: mgr.GetEventRecorderFor(controllerName), // nolint:staticcheck
-	}).SetupWithManager(mgr); err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to create Controller",
-			"controller", controllerName,
-			"err", err)
-		return err
-
-	}
-	// +kubebuilder:scaffold:builder
-
-	logger.KV(xlog.INFO, "status", "starting controller")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.KV(xlog.ERROR,
-			"reason", "unable to start controller",
-			"controller", controllerName,
-			"err", err)
-		return err
-	}
-	return nil
+	return ca, nil
 }

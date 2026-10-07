@@ -1,0 +1,98 @@
+{{- if $.Values.operator.enabled }}
+---
+# The operator controllers (internal/operator) and the webhook bootstrap;
+# kept in sync with config/rbac/role.yaml (the +kubebuilder:rbac markers).
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeca:operator
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+rules:
+- apiGroups:
+  - kubeca.effectivesecurity
+  resources:
+  - clusterissuers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kubeca.effectivesecurity
+  resources:
+  - certificates
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - kubeca.effectivesecurity
+  resources:
+  - certificates/status
+  - clusterissuers/status
+  verbs:
+  - get
+  - update
+  - patch
+# The Certificate controller writes the kubernetes.io/tls Secrets; its
+# cache only holds Secrets labeled kubeca.effectivesecurity/managed=true.
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+# CA bundle ConfigMaps (ClusterIssuer.spec.caBundle); delete prunes the
+# ones of namespaces without a Certificate of the issuer.
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+# Policy (namespace labels), name discovery (Services) and the Pod flow
+# (Pods labeled kubeca.effectivesecurity/inject=true).
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+{{- if $.Values.operator.webhook.enabled }}
+# The webhook patches the caBundle of its MutatingWebhookConfiguration.
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - patch
+{{- end }}
+{{- end }}

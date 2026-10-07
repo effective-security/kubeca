@@ -1,4 +1,7 @@
+{{- if $.Values.csrSigner.enabled }}
 ---
+# The CSR signer and its approver (internal/controller; the
+# +kubebuilder:rbac markers are aggregated in config/rbac/role.yaml).
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -24,11 +27,29 @@ rules:
 - apiGroups:
   - certificates.k8s.io
   resources:
+  - certificatesigningrequests/approval
+  verbs:
+  - update
+- apiGroups:
+  - certificates.k8s.io
+  resources:
   - signers
   resourceNames:
   - kubeca.svc/* # kubeca.svc/* can be used to authorize for all signers in the 'kubeca.svc' domain
   verbs:
   - sign
+  - approve
+# The approver reads the Pods and Services of the requesting ServiceAccount
+# (-approve audit or enforce).
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -36,3 +57,25 @@ rules:
   verbs:
   - create
   - patch
+{{- end }}
+{{- if and $.Values.csrSigner.enabled $.Values.csrSigner.createCSRCreatorRole }}
+---
+# Bound by workloads that run kubecertinit (examples/initcontainer/rbac.yaml);
+# the chart creates the ClusterRole only, never a binding.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeca:csr-creator
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+rules:
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - certificatesigningrequests
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+{{- end }}

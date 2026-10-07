@@ -1,0 +1,54 @@
+# Step 3 of the shop demo: a Pod with a known name gets its own certificate
+# through the inject label. The Pod controller creates the Certificate
+# `worker-1` owned by the Pod (garbage-collected with it) and the
+# Certificate controller writes the Secret `worker-1-tls`. Nothing
+# TLS-related is declared below: the webhook sets the secret-name
+# annotation, adds the Secret volume `kubeca-tls` and mounts it read-only
+# at /etc/tls (the mount-path annotation's default) into every container,
+# where the certmonitor arguments expect the files. Names: the Pod IP and
+# DNS name, the selecting Services, the ServiceAccount SPIFFE ID
+# (spiffe://cluster.local/ns/shop/sa/worker) and the `san` annotation.
+# Without the webhook, declare the Secret volume `worker-1-tls` and its
+# mount yourself.
+#
+# The container is certmonitor (cmd/certmonitor): it prints the
+# certificate when it starts and again every time the kubelet updates the
+# Secret volume after a renewal. The duration and renew-before annotations
+# shorten the profile's 24 h to 15 minutes (10 of them after the 5-minute
+# backdate) renewed 5 minutes before expiry, so a renewal comes every 3 to
+# 5 minutes (the issuance is truncated to the minute and the renewal
+# jittered) and the kubelet updates the volume within a minute; remove
+# them for the profile's lifetime.
+#
+#   kubectl -n shop logs -f worker-1
+#   kubectl -n shop get cert worker-1     # RENEWAL is the next renewal
+#
+# The image effectivesecurity/certmonitor:main is built and loaded into
+# minikube by `make minikube-images` (Dockerfile.certmonitor); CI does not
+# publish it.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-1
+  namespace: shop
+  labels:
+    app: worker
+    kubeca.effectivesecurity/inject: "true"
+  annotations:
+    kubeca.effectivesecurity/issuer: kubeca
+    kubeca.effectivesecurity/profile: client-24h
+    kubeca.effectivesecurity/san: localhost
+    kubeca.effectivesecurity/duration: 15m
+    kubeca.effectivesecurity/renew-before: 5m
+spec:
+  serviceAccountName: worker
+  containers:
+    - name: worker
+      image: effectivesecurity/certmonitor:main
+      imagePullPolicy: IfNotPresent
+      args:
+        - -cert=/etc/tls/tls.crt
+        - -key=/etc/tls/tls.key
+        - -root=/etc/tls/ca.crt
+        - -interval=10s

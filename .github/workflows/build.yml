@@ -74,7 +74,13 @@ jobs:
           go-version-file: go.mod
 
       - name: Prepare
-        run: make vars tools folders generate  version change_log
+        run: make vars tools folders generate manifests envtest version change_log
+
+      - name: Generated files are committed
+        run: git diff --exit-code -- api config examples/kubeca/crds
+
+      - name: Lint
+        run: make fmt-check vet lint
 
       - name: UnitTest
         run: make build covtest

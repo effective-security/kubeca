@@ -1,0 +1,62 @@
+# Step 4 of the shop demo: per-Pod certificates for a Deployment. The
+# mutating webhook sees each Pod at CREATE (metadata.name is empty for
+# generateName Pods), picks a unique Secret name kubeca-<8 chars>, records
+# it in the secret-name annotation and injects the volume and the mount
+# into the `api` container only (containers annotation). The Pod
+# controller then creates the Certificate owned by the Pod, and the
+# kubelet starts the containers once the Secret exists. Nothing
+# TLS-related is written in the template but the certmonitor arguments,
+# which point at the default mount path /etc/tls; the sidecar gets no
+# mount.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: shop
+spec:
+  selector:
+    app: api
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        kubeca.effectivesecurity/inject: "true"
+      annotations:
+        kubeca.effectivesecurity/issuer: kubeca
+        kubeca.effectivesecurity/profile: peer-24h
+        kubeca.effectivesecurity/mount-path: /etc/tls
+        kubeca.effectivesecurity/containers: api
+        kubeca.effectivesecurity/san: localhost
+    spec:
+      serviceAccountName: api
+      containers:
+        - name: api
+          image: effectivesecurity/certmonitor:main
+          imagePullPolicy: IfNotPresent
+          args:
+            - -cert=/etc/tls/tls.crt
+            - -key=/etc/tls/tls.key
+            - -root=/etc/tls/ca.crt
+          ports:
+            - name: https
+              containerPort: 8443
+        - name: metrics-sidecar
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "sleep infinity"]

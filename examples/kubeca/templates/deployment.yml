@@ -43,8 +43,50 @@ spec:
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           securityContext:
             {{- toYaml $.Values.securityContext | nindent 12 }}
-          command: 
+          command:
             {{- toYaml $.Values.command | nindent 12 }}
+            - -cluster-domain={{ $.Values.clusterDomain }}
+            - -metrics-addr=:{{ $.Values.metricsPort }}
+            - -health-probe-addr=:{{ $.Values.healthProbePort }}
+            # always: the binary turns it on by itself in operator mode only,
+            # and two CSR-signer-only replicas would both sign every CSR
+            # (templates/role-leader-election.yaml grants the Lease)
+            - -enable-leader-election
+            {{- if $.Values.csrSigner.enabled }}
+            - -approve={{ $.Values.csrSigner.approve }}
+            - -approve-allowed-names={{ $.Values.csrSigner.allowedNames }}
+            {{- else }}
+            - -disable-csr-signer
+            {{- end }}
+            {{- if $.Values.operator.enabled }}
+            - -enable-operator
+            {{- if $.Values.operator.webhook.enabled }}
+            - -enable-webhook
+            - -webhook-port={{ $.Values.operator.webhook.port }}
+            - -webhook-cert-dir=/kubeca/webhook
+            - -webhook-service={{ include "kubeca.fullname" $ }}-webhook
+            - -webhook-namespace={{ $.Release.Namespace }}
+            - -webhook-signer={{ $.Values.operator.webhook.signer }}
+            - -webhook-config={{ include "kubeca.webhookConfigName" $ }}
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ $.Values.metricsPort }}
+            - name: health
+              containerPort: {{ $.Values.healthProbePort }}
+            {{- if and $.Values.operator.enabled $.Values.operator.webhook.enabled }}
+            - name: webhook
+              containerPort: {{ $.Values.operator.webhook.port }}
+            {{- end }}
+          # ready once the webhook server accepts TLS connections (with the
+          # webhook): a rollout keeps an old replica until then
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
           {{- if $.Values.config.common }}
@@ -60,10 +102,19 @@ spec:
           - name: "kubeca-certs-volume"
             mountPath: "/kubeca/certs"
             readOnly: true
+          {{- if and $.Values.operator.enabled $.Values.operator.webhook.enabled }}
+          - name: "kubeca-webhook-volume"
+            mountPath: "/kubeca/webhook"
+          {{- end }}
       volumes:
       - name: kubeca-certs-volume
         secret:
-          secretName: {{ include "kubeca.fullname" $ }}-certs-secret-tf
+          secretName: {{ include "kubeca.certsSecretName" $ }}
+      {{- if and $.Values.operator.enabled $.Values.operator.webhook.enabled }}
+      - name: kubeca-webhook-volume
+        emptyDir:
+          medium: Memory
+      {{- end }}
 
       - name: kubeca-etc-volume
         configMap:

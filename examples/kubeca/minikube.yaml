@@ -24,3 +24,48 @@ resources:
   limits:
     memory: "512Mi"
     cpu: "1"
+
+# The e2e test issues 5-minute certificates renewed 2 minutes before
+# expiry to prove renewal and key rotation within minutes
+# (scripts/minikube_test.sh). The usable lifetime after the backdate must
+# stay above 2 minutes.
+extraProfiles:
+  e2e-5m:
+    issuer_label: kubeca.svc
+    expiry: 5m
+    backdate: 1m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+      - client auth
+    allowed_fields:
+      dns: true
+      ip: true
+      uri: true
+
+# The e2e ClusterIssuer exposes every profile the issuer serves (the
+# e2e-5m profile above included) with the default policy.
+clusterIssuers:
+  - name: kubeca
+    spec:
+      issuerLabel: kubeca.svc
+      defaultProfile: peer-24h
+      spiffe:
+        trustDomain: cluster.local
+      policy:
+        namespaceSelector:
+          matchLabels:
+            kubeca.effectivesecurity/enabled: "true"
+        maxDuration: 24h
+        allowedDNSNames:
+          - ^[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          - ^[a-z0-9-]+\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          - ^\*\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          - ^[0-9a-f-]+\.${NAMESPACE}\.pod\.${CLUSTER_DOMAIN}$
+          - ^localhost$
+        allowedURIs:
+          - ^spiffe://cluster\.local/ns/${NAMESPACE}/sa/[a-z0-9-]+$
+        allowIPAddresses: true
+      caBundle:
+        configMapName: kubeca-ca

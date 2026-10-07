@@ -1,15 +1,9 @@
-# StatefulSet with one shared certificate. Kubernetes cannot template a
-# per-ordinal secretName, so the replicas share the Secret `db-tls` whose
-# certificate covers every Pod DNS name of the headless Service with a
-# wildcard (`*.db.shop.svc.cluster.local`), the Service name and the
-# ServiceAccount's SPIFFE ID. Per-Pod identity (Pod IP, one key per Pod)
-# needs the webhook flow in deployment-injected.yaml.
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: db
-  namespace: shop
+# Step 5 of the shop demo: a StatefulSet with one shared certificate.
+# Kubernetes cannot template a per-ordinal secretName, so the replicas
+# share the Secret `db-tls` whose certificate covers every Pod DNS name of
+# the headless Service with a wildcard (`*.db.shop.svc.cluster.local`),
+# the Service name and the ServiceAccount's SPIFFE ID. Per-Pod identity
+# (Pod IP, one key per Pod) needs the inject label (deployment-injected.yaml).
 ---
 apiVersion: v1
 kind: Service
@@ -41,7 +35,7 @@ spec:
     - "*.db.shop.svc"
     - localhost
   uris:
-    - spiffe://example.org/ns/shop/sa/db
+    - spiffe://cluster.local/ns/shop/sa/db
   duration: 24h
   renewBefore: 8h
 ---
@@ -68,7 +62,12 @@ spec:
             secretName: db-tls
       containers:
         - name: db
-          image: example/db:latest
+          image: effectivesecurity/certmonitor:main
+          imagePullPolicy: IfNotPresent
+          args:
+            - -cert=/etc/tls/tls.crt
+            - -key=/etc/tls/tls.key
+            - -root=/etc/tls/ca.crt
           ports:
             - name: sql
               containerPort: 5432

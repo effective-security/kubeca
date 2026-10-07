@@ -1,0 +1,62 @@
+{{- if and $.Values.operator.enabled $.Values.operator.podCertificatePolicy ($.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy") }}
+---
+# The Certificate controller expands the issuer policy placeholder
+# ${SERVICE_ACCOUNT} to the ServiceAccount of the Pod that controls a
+# Certificate. Owner references are written by whoever creates the object,
+# so only the operator may create a Certificate controlled by a Pod or
+# change its spec or owner references; anyone allowed to update it may
+# still annotate it (renew-requested) or drop the Pod as controller (the
+# garbage collector does when the Pod is deleted with orphan propagation),
+# which makes it a plain Certificate, but not in the same update as a spec
+# change. Kubernetes 1.30 or later.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "kubeca.fullname" $ }}-pod-certificates
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [kubeca.effectivesecurity]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificates]
+  variables:
+    - name: operator
+      expression: "'system:serviceaccount:{{ $.Release.Namespace }}:{{ include "kubeca.serviceAccountName" $ }}'"
+    - name: podControlled
+      expression: >-
+        has(object.metadata.ownerReferences) &&
+        object.metadata.ownerReferences.exists(r, r.apiVersion == 'v1' && r.kind == 'Pod' && has(r.controller) && r.controller)
+    - name: wasPodControlled
+      expression: >-
+        request.operation == 'UPDATE' && has(oldObject.metadata.ownerReferences) &&
+        oldObject.metadata.ownerReferences.exists(r, r.apiVersion == 'v1' && r.kind == 'Pod' && has(r.controller) && r.controller)
+    - name: specUnchanged
+      expression: "request.operation == 'UPDATE' && object.spec == oldObject.spec"
+    - name: ownersUnchanged
+      expression: >-
+        request.operation == 'UPDATE' && has(object.metadata.ownerReferences) && has(oldObject.metadata.ownerReferences) &&
+        object.metadata.ownerReferences == oldObject.metadata.ownerReferences
+  validations:
+    # Pod-controlled before or after the request: the spec stays, and the
+    # owners stay unless the Pod controller is dropped
+    - expression: >-
+        request.userInfo.username == variables.operator ||
+        ((!variables.podControlled || (variables.specUnchanged && variables.ownersUnchanged)) &&
+        (!variables.wasPodControlled || variables.specUnchanged))
+      message: only the kubeca operator may create a Certificate controlled by a Pod or change its spec or owner references
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "kubeca.fullname" $ }}-pod-certificates
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  policyName: {{ include "kubeca.fullname" $ }}-pod-certificates
+  validationActions: [Deny]
+{{- end }}

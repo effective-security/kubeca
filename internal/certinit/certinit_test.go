@@ -2,11 +2,13 @@ package certinit_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/effective-security/kubeca/internal/certinit"
 	"github.com/effective-security/xpki/csr"
@@ -17,6 +19,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
@@ -406,16 +409,119 @@ func TestCreateContextDone(t *testing.T) {
 	c := mockedCertificates{}
 	mocked := &certinit.CertClient{Certificates: &c}
 	c.On("Get", mock.Anything, mock.Anything, mock.Anything).Once().Return(&capi.CertificateSigningRequest{}, nil)
-	// still pending; the context ends before the next poll
+	// still pending; the watch is unavailable and the context ends before
+	// the next poll
 	c.On("Get", mock.Anything, mock.Anything, mock.Anything).Once().
 		Run(func(mock.Arguments) { cancel() }).
 		Return(&capi.CertificateSigningRequest{}, nil)
+	c.On("Watch", mock.Anything, mock.Anything).Once().Return(nil, errors.New("watch unavailable"))
 
 	err := r.Create(ctx, mocked)
 	require.Error(t, err)
 	assert.Regexp(t, `^gave up waiting for certificate signing request pod-1-test-[0-9a-z]{5}: context canceled$`, err.Error())
 	assert.ErrorIs(t, err, context.Canceled)
 	c.AssertExpectations(t)
+}
+
+// TestCreateWatch covers the watch after the CSR is created (KUBECA-006):
+// the certificate arrives as a Modified event, after a watch that ended
+// without a decision (reopened after a second) and one that reported an
+// error event (reopened after the five-second poll interval).
+func TestCreateWatch(t *testing.T) {
+	r := &certinit.Request{
+		Namespace:  testNamespace,
+		PodName:    testPodName,
+		CertDir:    t.TempDir(),
+		SAN:        "svc.test.svc.cluster.local",
+		SignerName: "kubeca.svc/client",
+	}
+	c := mockedCertificates{}
+	mocked := &certinit.CertClient{Certificates: &c}
+	notFound := apierrors.NewNotFound(capi.Resource("certificatesigningrequests"), testPodName)
+	pending := &capi.CertificateSigningRequest{ObjectMeta: metaV1.ObjectMeta{ResourceVersion: "7"}}
+	c.On("Get", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, notFound)
+	c.On("Create", mock.Anything, mock.Anything, mock.Anything).Once().Return(pending, nil)
+	// pending on every read; the watches decide
+	c.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(pending, nil)
+
+	// 1: the watch ends without an event
+	closed := watch.NewFake()
+	closed.Stop()
+	// 2: an error event, then nothing
+	errored := watch.NewFake()
+	// 3: a Modified event without the certificate, then the certificate
+	issued := watch.NewFake()
+	c.On("Watch", mock.Anything, mock.MatchedBy(func(opts metaV1.ListOptions) bool {
+		return opts.ResourceVersion == "7" && opts.FieldSelector != ""
+	})).Once().Return(closed, nil)
+	c.On("Watch", mock.Anything, mock.Anything).Once().Run(func(mock.Arguments) {
+		go errored.Error(&metaV1.Status{Message: "too old resource version"})
+	}).Return(errored, nil)
+	c.On("Watch", mock.Anything, mock.Anything).Once().Run(func(mock.Arguments) {
+		go func() {
+			issued.Modify(&capi.CertificateSigningRequest{})
+			issued.Modify(&capi.CertificateSigningRequest{Status: capi.CertificateSigningRequestStatus{Certificate: []byte("cert")}})
+		}()
+	}).Return(issued, nil)
+
+	started := time.Now()
+	err := r.Create(context.Background(), mocked)
+	require.NoError(t, err)
+	// one second after the closed watch, five after the error event
+	assert.GreaterOrEqual(t, time.Since(started), 6*time.Second)
+	c.AssertExpectations(t)
+	crt, err := os.ReadFile(filepath.Join(r.CertDir, "tls.crt"))
+	require.NoError(t, err)
+	assert.Equal(t, "cert", string(crt))
+}
+
+// TestCreateWatchDenied checks the Denied condition and the deletion seen
+// through the watch.
+func TestCreateWatchDenied(t *testing.T) {
+	for name, tc := range map[string]struct {
+		send func(*watch.FakeWatcher)
+		err  string
+	}{
+		"denied": {
+			send: func(w *watch.FakeWatcher) {
+				w.Modify(&capi.CertificateSigningRequest{Status: capi.CertificateSigningRequestStatus{
+					Conditions: []capi.CertificateSigningRequestCondition{{Type: capi.CertificateDenied, Reason: "NamesNotAllowed", Message: "api.test.svc"}},
+				}})
+			},
+			err: `^certificate signing request \(pod-1-test-[0-9a-z]{5}\) denied for "NamesNotAllowed": "api.test.svc"$`,
+		},
+		"failed": {
+			send: func(w *watch.FakeWatcher) {
+				w.Modify(&capi.CertificateSigningRequest{Status: capi.CertificateSigningRequestStatus{
+					Conditions: []capi.CertificateSigningRequestCondition{{Type: capi.CertificateFailed, Reason: "SigningFailed", Message: "invalid SAN"}},
+				}})
+			},
+			err: `^certificate signing request \(pod-1-test-[0-9a-z]{5}\) failed for "SigningFailed": "invalid SAN"$`,
+		},
+		"deleted": {
+			send: func(w *watch.FakeWatcher) { w.Delete(&capi.CertificateSigningRequest{}) },
+			err:  `^certificate signing request not found: pod-1-test-[0-9a-z]{5}$`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &certinit.Request{
+				Namespace:  testNamespace,
+				PodName:    testPodName,
+				CertDir:    t.TempDir(),
+				SAN:        "svc.test.svc.cluster.local",
+				SignerName: "kubeca.svc/client",
+			}
+			c := mockedCertificates{}
+			w := watch.NewFake()
+			c.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(&capi.CertificateSigningRequest{}, nil)
+			c.On("Watch", mock.Anything, mock.Anything).Once().Run(func(mock.Arguments) { go tc.send(w) }).Return(w, nil)
+
+			err := r.Create(context.Background(), &certinit.CertClient{Certificates: &c})
+			require.Error(t, err)
+			assert.Regexp(t, tc.err, err.Error())
+			c.AssertExpectations(t)
+		})
+	}
 }
 
 // issuingCertificates returns a certificates mock that reports the CSR as
@@ -474,4 +580,10 @@ func (m *mockedCertificates) Get(ctx context.Context, name string, opts metaV1.G
 	args := m.Called(ctx, name, opts)
 	csr, _ := args.Get(0).(*capi.CertificateSigningRequest)
 	return csr, args.Error(1)
+}
+
+func (m *mockedCertificates) Watch(ctx context.Context, opts metaV1.ListOptions) (watch.Interface, error) {
+	args := m.Called(ctx, opts)
+	w, _ := args.Get(0).(watch.Interface)
+	return w, args.Error(1)
 }

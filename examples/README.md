@@ -1,23 +1,13 @@
 # Examples
 
-| Directory                       | Status      | Content                                                                                                                                             |
-| ------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [initcontainer/](initcontainer) | Works today | A Deployment with the `kubecertinit` init container, the RBAC its ServiceAccount needs, and `dummy-deployment.yaml` (busybox) for the minikube test |
-| [kubeca/](kubeca)               | Works today | The Helm chart; `minikube.yaml` and `etc/aws-dev-kms-minikube.yaml` are the overlay for the minikube test                                           |
-| [operator/](operator)           | Proposed    | Manifests for the planned `kubeca.effectivesecurity/v1alpha1` API; validated in PLAN.md batches P4 and P7                                           |
+| Directory                       | Owner                 | Status     | Content                                                                                                                      |
+| ------------------------------- | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [kubeca/](kubeca)               | Cluster administrator | Current    | The Helm chart: CRDs, controller (operator, webhook, CSR signer), RBAC, CA configuration and profiles, `ClusterIssuer`       |
+| [shop/](shop)                   | Application team      | Current    | What a namespace deploys to get certificates from the operator: `Certificate`s, the inject label, a StatefulSet; `e2e/` for the minikube test |
+| [initcontainer/](initcontainer) | Application team      | Deprecated | The `kubecertinit` init container, its RBAC, and the certmonitor variant the minikube test deploys                          |
 
-The init-container manifests assume `kubeca` is installed from
-`examples/kubeca` with the issuer label `kubeca.svc` and the profiles of
-`examples/kubeca/etc/ca-config.kubeca.yaml`. Apply them with:
-
-```sh
-kubectl apply -f examples/initcontainer/rbac.yaml
-kubectl apply -f examples/initcontainer/deployment.yaml
-kubectl -n shop get pods -w
-kubectl get csr
-```
-
-The operator manifests target the design in
-[`Documentation/design/operator-api.md`](../Documentation/design/operator-api.md);
-the CRDs do not exist in a cluster yet, so `kubectl apply` fails until
-batch P1 ships. Keep them in sync with the API document.
+Deploy order: the chart first (`kubeca/README.md`), then the application
+manifests (`shop/README.md`). Each directory's README lists its files, what
+they show and the order to apply them. `make minikube-all` runs the whole
+sequence against the local KMS emulators (root README, "Local test with
+minikube").

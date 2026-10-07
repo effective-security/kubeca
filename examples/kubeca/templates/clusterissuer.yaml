@@ -1,0 +1,17 @@
+{{- if $.Values.operator.enabled }}
+{{- range $.Values.clusterIssuers }}
+---
+# ClusterIssuers of this installation (values.clusterIssuers): each binds an
+# issuer label of etc/ca-config.kubeca.yaml to a policy. Helm installs crds/
+# before the templates, so the objects can be created on the first install;
+# on an upgrade that brings new CRDs apply crds/ first.
+apiVersion: kubeca.effectivesecurity/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  {{- toYaml .spec | nindent 2 }}
+{{- end }}
+{{- end }}

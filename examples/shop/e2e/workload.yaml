@@ -1,0 +1,116 @@
+# Workload of the minikube end-to-end test (scripts/minikube_test.sh), in
+# the shop namespace of ../namespace.yaml: a Certificate with the e2e-5m
+# profile of examples/kubeca/minikube.yaml (5 m lifetime, renewBefore 2 m,
+# renewed about 3 min after issuance) mounted by a Deployment whose
+# certmonitor logs every renewal, and
+# a bare Pod with the inject label and no volume (the webhook injects it,
+# the Pod controller creates its Certificate). The names are distinct from
+# the demo manifests so both can coexist.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: e2e-api
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: e2e-worker
+  namespace: shop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2e-api
+  namespace: shop
+spec:
+  selector:
+    app: e2e-api
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: kubeca.effectivesecurity/v1alpha1
+kind: Certificate
+metadata:
+  name: e2e-api-tls
+  namespace: shop
+spec:
+  issuerRef:
+    name: kubeca
+  profile: e2e-5m
+  secretName: e2e-api-tls
+  commonName: e2e-api.shop.svc.cluster.local
+  dnsNames:
+    - localhost
+  uris:
+    - spiffe://cluster.local/ns/shop/sa/e2e-api
+  kubernetesNames:
+    services: [e2e-api]
+    includeUnqualified: true
+    includeClusterIP: true
+  duration: 5m
+  renewBefore: 2m
+  secretTemplate:
+    labels:
+      app: e2e-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-api
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e2e-api
+  template:
+    metadata:
+      labels:
+        app: e2e-api
+    spec:
+      serviceAccountName: e2e-api
+      volumes:
+        - name: tls
+          secret:
+            secretName: e2e-api-tls
+      containers:
+        - name: api
+          image: effectivesecurity/certmonitor:main
+          imagePullPolicy: IfNotPresent
+          args:
+            - -cert=/etc/tls/tls.crt
+            - -key=/etc/tls/tls.key
+            - -root=/etc/tls/ca.crt
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e2e-worker
+  namespace: shop
+  labels:
+    app: e2e-worker
+    kubeca.effectivesecurity/inject: "true"
+  annotations:
+    kubeca.effectivesecurity/issuer: kubeca
+    kubeca.effectivesecurity/profile: e2e-5m
+    kubeca.effectivesecurity/duration: 5m
+    kubeca.effectivesecurity/renew-before: 2m
+    kubeca.effectivesecurity/san: localhost
+spec:
+  serviceAccountName: e2e-worker
+  containers:
+    - name: worker
+      image: effectivesecurity/certmonitor:main
+      imagePullPolicy: IfNotPresent
+      args:
+        - -cert=/etc/tls/tls.crt
+        - -key=/etc/tls/tls.key
+        - -root=/etc/tls/ca.crt

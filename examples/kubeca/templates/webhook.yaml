@@ -1,0 +1,63 @@
+{{- if and $.Values.operator.enabled $.Values.operator.webhook.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kubeca.fullname" $ }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  selector:
+    {{- include "kubeca.selectorLabels" $ | nindent 4 }}
+  ports:
+    - name: https
+      port: 443
+      targetPort: webhook
+---
+# The caBundle is patched by the operator at start-up, after each renewal
+# of its serving certificate, and every minute when it differs (a helm
+# upgrade re-renders this object without it).
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "kubeca.webhookConfigName" $ }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+webhooks:
+  - name: pods.kubeca.effectivesecurity
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: {{ $.Values.operator.webhook.failurePolicy }}
+    matchPolicy: Equivalent
+    timeoutSeconds: 10
+    objectSelector:
+      matchLabels:
+        kubeca.effectivesecurity/inject: "true"
+    rules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        resources: [pods]
+        operations: [CREATE]
+    clientConfig:
+      service:
+        name: {{ include "kubeca.fullname" $ }}-webhook
+        namespace: {{ .Release.Namespace }}
+        path: /mutate-pod
+        port: 443
+{{- if gt (int $.Values.replicaCount.default) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "kubeca.fullname" $ }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeca.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "kubeca.selectorLabels" $ | nindent 6 }}
+{{- end }}
+{{- end }}

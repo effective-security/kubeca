@@ -1,0 +1,34 @@
+# Step 1 of the shop demo: the namespace and the ServiceAccounts the demo
+# workloads run as. The label opts the namespace in to the ClusterIssuer
+# policy of the kubeca chart (clusterIssuers[].spec.policy.namespaceSelector).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    kubeca.effectivesecurity/enabled: "true"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker
+  namespace: shop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: db
+  namespace: shop

@@ -1,5 +1,9 @@
-# Dummy workload for the minikube test: a busybox container that only sleeps,
-# with the kubecertinit init container requesting a certificate for the Pod.
+# DEPRECATED since v0.9: the init-container flow issues one certificate per
+# Pod start and never renews it. New workloads use the operator: a
+# Certificate mounted as a Secret (examples/shop/certificate.yaml) or
+# the inject label (examples/shop/pod.yaml, deployment-injected.yaml).
+# Dummy workload for the minikube test: a certmonitor container that logs
+# the certificate the kubecertinit init container requested for the Pod.
 # Needs examples/initcontainer/rbac.yaml (namespace shop, ServiceAccount web).
 ---
 apiVersion: v1
@@ -68,9 +72,13 @@ spec:
               mountPath: /etc/tls
       containers:
         - name: web
-          image: busybox:1.37
+          image: effectivesecurity/certmonitor:main
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "ls -l /etc/tls && sleep infinity"]
+          # the init container writes tls.key, tls.csr and tls.crt, no
+          # ca.crt, and never renews: the monitor prints the certificate once
+          args:
+            - -cert=/etc/tls/tls.crt
+            - -key=/etc/tls/tls.key
           volumeMounts:
             - name: tls
               mountPath: /etc/tls

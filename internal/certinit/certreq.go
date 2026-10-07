@@ -10,15 +10,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
+	"github.com/effective-security/kubeca/internal/k8snames"
 	"github.com/effective-security/xlog"
 	"github.com/effective-security/xpki/certutil"
 	"github.com/effective-security/xpki/cryptoprov/inmemcrypto"
 	"github.com/effective-security/xpki/csr"
 	"github.com/effective-security/xpki/x/print"
-	"github.com/pkg/errors"
 	capi "k8s.io/api/certificates/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
@@ -26,8 +29,11 @@ const (
 	requestNameSuffixLength = 5
 
 	// pollInterval is the delay between reads of the CSR while waiting for
-	// the certificate.
+	// the certificate when the watch is unavailable.
 	pollInterval = 5 * time.Second
+	// watchRetryDelay is the pause before the CSR is read and watched
+	// again after a watch ended without a decision.
+	watchRetryDelay = time.Second
 
 	keyFileName  = "tls.key"
 	csrFileName  = "tls.csr"
@@ -70,7 +76,7 @@ var usages = map[string][]capi.KeyUsage{
 func (r *Request) profileUsages(profile string) ([]capi.KeyUsage, error) {
 	if r.Usages != "" {
 		var list []capi.KeyUsage
-		for u := range splitList(r.Usages) {
+		for u := range k8snames.SplitList(r.Usages) {
 			list = append(list, capi.KeyUsage(u))
 		}
 		if len(list) == 0 {
@@ -176,10 +182,14 @@ func (r *Request) requestCertificate(ctx context.Context, client MinCertificates
 	return nil
 }
 
-// waitForCertificate polls the CSR every pollInterval until it carries a
-// certificate, a Denied or Failed condition, is deleted, or ctx is done.
+// waitForCertificate reads the CSR once, then watches it until it carries
+// a certificate, a Denied or Failed condition, is deleted, or ctx is done
+// (KUBECA-006). When the watch ends without a decision, the CSR is read
+// again and the watch reopened after watchRetryDelay; when it cannot be
+// opened or reports an error event, after pollInterval.
 func (r *Request) waitForCertificate(ctx context.Context, client MinCertificates, name string) ([]byte, error) {
 	for {
+		delay := pollInterval
 		csr, err := client.Get(ctx, name, metaV1.GetOptions{})
 		switch {
 		case apierrors.IsNotFound(err):
@@ -190,31 +200,91 @@ func (r *Request) waitForCertificate(ctx context.Context, client MinCertificates
 				"name", name,
 				"err", err.Error(),
 			)
-		case len(csr.Status.Certificate) > 0:
-			logger.ContextKV(ctx, xlog.INFO, "status", "got certificate")
-			return csr.Status.Certificate, nil
 		default:
-			for _, condition := range csr.Status.Conditions {
-				switch condition.Type {
-				case capi.CertificateDenied:
-					return nil, errors.Errorf("certificate signing request (%s) denied for %q: %q", name, condition.Reason, condition.Message)
-				case capi.CertificateFailed:
-					return nil, errors.Errorf("certificate signing request (%s) failed for %q: %q", name, condition.Reason, condition.Message)
-				}
+			if cert, done, err := certificateOf(ctx, csr, name); done {
+				return cert, err
 			}
-
-			logger.ContextKV(ctx, xlog.INFO, "status", "csr not issued",
-				"name", name,
-				"retry", "in "+pollInterval.String(),
-			)
+			logger.ContextKV(ctx, xlog.INFO, "status", "csr not issued, waiting", "name", name)
+			cert, done, err := r.watchCertificate(ctx, client, name, csr.ResourceVersion)
+			if done {
+				return cert, err
+			}
+			if err == nil {
+				// the watch ended: read and watch again after a short pause
+				delay = watchRetryDelay
+			} else {
+				logger.ContextKV(ctx, xlog.WARNING, "status", "unable to watch certificate signing request, polling",
+					"name", name,
+					"retry", "in "+pollInterval.String(),
+					"err", err.Error(),
+				)
+			}
 		}
 
 		select {
 		case <-ctx.Done():
 			return nil, errors.Wrapf(ctx.Err(), "gave up waiting for certificate signing request %s", name)
-		case <-time.After(pollInterval):
+		case <-time.After(delay):
 		}
 	}
+}
+
+// watchCertificate follows the CSR from resourceVersion. done is true
+// with the outcome; otherwise err is the Watch error or the error event
+// the server sent, or nil when the watch ended without a decision.
+func (r *Request) watchCertificate(ctx context.Context, client MinCertificates, name, resourceVersion string) (cert []byte, done bool, err error) {
+	w, err := client.Watch(ctx, metaV1.ListOptions{
+		FieldSelector:   fields.OneTermEqualSelector(metaV1.ObjectNameField, name).String(),
+		ResourceVersion: resourceVersion,
+	})
+	if err != nil {
+		return nil, false, errors.WithStack(err)
+	}
+	defer w.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, true, errors.Wrapf(ctx.Err(), "gave up waiting for certificate signing request %s", name)
+		case event, ok := <-w.ResultChan():
+			if !ok {
+				return nil, false, nil
+			}
+			switch event.Type {
+			case watch.Deleted:
+				return nil, true, errors.New("certificate signing request not found: " + name)
+			case watch.Added, watch.Modified:
+				updated, isCSR := event.Object.(*capi.CertificateSigningRequest)
+				if !isCSR {
+					continue
+				}
+				if cert, done, err := certificateOf(ctx, updated, name); done {
+					return cert, true, err
+				}
+			case watch.Error:
+				// an API status (410 Gone for a resource version that
+				// is too old, a server error): the caller polls
+				return nil, false, errors.WithMessage(apierrors.FromObject(event.Object), "watch error event")
+			}
+		}
+	}
+}
+
+// certificateOf returns the certificate of an issued CSR, or the error of
+// a Denied or Failed one; done is false while the CSR is pending.
+func certificateOf(ctx context.Context, csr *capi.CertificateSigningRequest, name string) (cert []byte, done bool, err error) {
+	if len(csr.Status.Certificate) > 0 {
+		logger.ContextKV(ctx, xlog.INFO, "status", "got certificate", "name", name)
+		return csr.Status.Certificate, true, nil
+	}
+	for _, condition := range csr.Status.Conditions {
+		switch condition.Type {
+		case capi.CertificateDenied:
+			return nil, true, errors.Errorf("certificate signing request (%s) denied for %q: %q", name, condition.Reason, condition.Message)
+		case capi.CertificateFailed:
+			return nil, true, errors.Errorf("certificate signing request (%s) failed for %q: %q", name, condition.Reason, condition.Message)
+		}
+	}
+	return nil, false, nil
 }
 
 func (r *Request) requestName() (name string) {

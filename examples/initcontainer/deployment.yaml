@@ -1,3 +1,7 @@
+# DEPRECATED since v0.9: the init-container flow issues one certificate per
+# Pod start and never renews it. New workloads use the operator: a
+# Certificate mounted as a Secret (examples/shop/certificate.yaml) or
+# the inject label (examples/shop/pod.yaml, deployment-injected.yaml).
 # A Deployment whose Pods obtain a certificate from kubeca at start-up.
 # The init container writes tls.key, tls.csr and tls.crt into the shared
 # in-memory volume; the application reads them from /etc/tls.

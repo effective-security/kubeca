@@ -1,6 +1,8 @@
-# xpki CA configuration for the operator: short-lived profiles next to the
-# existing ones. Drop-in for examples/kubeca/etc/ca-config.kubeca.yaml once the
-# operator ships; the init-container profiles can stay during migration.
+# Test fixture of internal/testauthority: the short-lived profiles of the
+# chart's examples/kubeca/etc/ca-config.kubeca.yaml (peer-24h, server-24h,
+# client-24h, webhook) without the Helm templating, so the unit tests load
+# them through authority.LoadConfig. Keep the profiles in step with the
+# chart; the minikube e2e exercises the chart's own file.
 #
 # backdate stays at the 5m default: the operator sets NotBefore = now − backdate
 # and NotAfter = NotBefore + duration, so the usable lifetime is duration − backdate.
@@ -9,10 +11,10 @@ authority:
   issuers:
     - label: kubeca.svc
       type: tls
-      cert: "{{ .Values.issuers.kubeca.cert }}"
-      key: "{{ .Values.issuers.kubeca.key }}"
-      ca_bundle: "{{ .Values.issuers.kubeca.ca_bundle }}"
-      root_bundle: "{{ .Values.issuers.kubeca.root_bundle }}"
+      cert: ISSUER_CERT_FILE
+      key: ISSUER_KEY_FILE
+      ca_bundle: ""
+      root_bundle: ROOT_BUNDLE_FILE
       aia:
         issuer_url:
         crl_url:

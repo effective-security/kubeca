@@ -2,6 +2,14 @@
 // name discovery for a Pod, key and CSR generation, submission of a
 // CertificateSigningRequest and the wait for its certificate.
 //
+// The init-container flow is deprecated since v0.9: it issues one
+// certificate per Pod start and never renews it. New workloads use the
+// operator's Certificate resource or the inject label
+// (Documentation/design/operator.md); the package is kept for the
+// migration period. (The package is not marked with a Deprecated: tag so
+// that cmd/kubecertinit, the command of this flow, stays staticcheck
+// clean.)
+//
 //	client, err := certinit.NewClient("", namespace) // "" = in-cluster config
 //	if err != nil {
 //		return err

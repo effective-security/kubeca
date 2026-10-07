@@ -144,3 +144,22 @@ profiles:
       uri: true
       dns: true
       ip: true
+
+  # Serving certificate of the operator's own Pod mutating webhook
+  # (operator.webhook.signer); the names are the webhook Service's.
+  webhook:
+    issuer_label: kubeca.svc
+    expiry: 168h
+    backdate: 5m
+    usages:
+      - signing
+      - key encipherment
+      - server auth
+    allowed_dns: ^{{ include "kubeca.fullname" . }}-webhook\.{{ .Release.Namespace }}\.svc(\.{{ .Values.clusterDomain | replace "." "\\." }})?$
+    allowed_fields:
+      dns: true
+{{- range $name, $profile := .Values.extraProfiles }}
+
+  {{ $name }}:
+{{ toYaml $profile | indent 4 }}
+{{- end }}

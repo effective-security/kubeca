@@ -3,10 +3,17 @@
 # ClusterRole and a ClusterRoleBinding. The Pod and Service reads that
 # -query-k8s needs stay inside the workload's namespace (Role + RoleBinding).
 ---
+# The same namespace as examples/shop/namespace.yaml, with the same label:
+# `kubectl apply` of a Namespace without the label would remove it (the
+# three-way merge drops fields that left the last-applied configuration),
+# and the ClusterIssuer policy of the chart would then exclude the
+# namespace and mark its Certificates PolicyViolation.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: shop
+  labels:
+    kubeca.effectivesecurity/enabled: "true"
 ---
 apiVersion: v1
 kind: ServiceAccount

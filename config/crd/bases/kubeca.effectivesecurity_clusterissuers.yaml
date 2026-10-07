@@ -1,0 +1,307 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: clusterissuers.kubeca.effectivesecurity
+spec:
+  group: kubeca.effectivesecurity
+  names:
+    kind: ClusterIssuer
+    listKind: ClusterIssuerList
+    plural: clusterissuers
+    shortNames:
+    - cissuer
+    singular: clusterissuer
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .spec.issuerLabel
+      name: Label
+      type: string
+    - jsonPath: .status.caNotAfter
+      name: CA Not After
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ClusterIssuer binds an xpki issuer, loaded from the CA configuration at
+          start-up, to a policy and publishes its CA certificate.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterIssuerSpec binds an xpki issuer to a policy.
+            properties:
+              caBundle:
+                description: CABundle publishes the root bundle into a ConfigMap per
+                  namespace.
+                properties:
+                  configMapName:
+                    description: |-
+                      ConfigMapName of the ConfigMap (key ca.crt) the ClusterIssuer
+                      controller maintains in every namespace that has a Certificate of
+                      this issuer.
+                    maxLength: 253
+                    minLength: 1
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                    type: string
+                required:
+                - configMapName
+                type: object
+              defaultProfile:
+                description: DefaultProfile is used by Certificates and Pods that
+                  omit the profile.
+                type: string
+              issuerLabel:
+                description: |-
+                  IssuerLabel is the label of the issuer in the CA configuration
+                  (authority.issuers[].label). Immutable.
+                minLength: 1
+                type: string
+                x-kubernetes-validations:
+                - message: issuerLabel is immutable
+                  rule: self == oldSelf
+              policy:
+                description: |-
+                  Policy for the Certificates of this issuer; nil allows everything the
+                  profile allows.
+                properties:
+                  allowIPAddresses:
+                    description: AllowIPAddresses permits IP SANs; default false.
+                    type: boolean
+                  allowedDNSNames:
+                    description: |-
+                      AllowedDNSNames, AllowedURIs and AllowedEmailAddresses are RE2
+                      regexes a name must match; the subject common name must match
+                      AllowedDNSNames. ${NAMESPACE}, ${NAME}, ${SERVICE_ACCOUNT} and
+                      ${CLUSTER_DOMAIN} are substituted, regex-quoted, with the
+                      Certificate's namespace, name, the ServiceAccount of the Pod it
+                      belongs to (empty for a Certificate that no Pod owns) and the
+                      cluster domain of the operator (-cluster-domain). An absent list
+                      allows every name of that type; an empty list denies the type
+                      (pointers keep the two apart).
+                    items:
+                      type: string
+                    type: array
+                  allowedEmailAddresses:
+                    items:
+                      type: string
+                    type: array
+                  allowedURIs:
+                    items:
+                      type: string
+                    type: array
+                  maxDuration:
+                    description: |-
+                      MaxDuration is the upper bound of Certificate.spec.duration; the
+                      profile expiry bounds it as well.
+                    type: string
+                    x-kubernetes-validations:
+                    - message: maxDuration must be at least 1m
+                      rule: duration(self) >= duration('1m')
+                  namespaceSelector:
+                    description: |-
+                      NamespaceSelector limits the namespaces whose Certificates may use
+                      this issuer; nil allows all.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                type: object
+              profiles:
+                description: |-
+                  Profiles this ClusterIssuer exposes; empty exposes every profile the
+                  issuer serves. Unknown entries make the issuer not Ready.
+                items:
+                  type: string
+                type: array
+              spiffe:
+                description: SPIFFE enables the SPIFFE URI of the Pod flow.
+                properties:
+                  trustDomain:
+                    description: |-
+                      TrustDomain of the URIs `spiffe://<trustDomain>/ns/<ns>/sa/<sa>` the
+                      Pod controller adds.
+                    minLength: 1
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                    type: string
+                required:
+                - trustDomain
+                type: object
+            required:
+            - issuerLabel
+            type: object
+            x-kubernetes-validations:
+            - message: defaultProfile must be listed in profiles
+              rule: '!has(self.defaultProfile) || !has(self.profiles) || size(self.profiles)
+                == 0 || self.defaultProfile in self.profiles'
+          status:
+            description: ClusterIssuerStatus is the observed state of a ClusterIssuer.
+            properties:
+              caCertificate:
+                description: CACertificate is the issuing certificate and its chain,
+                  PEM.
+                type: string
+              caNotAfter:
+                description: CANotAfter is the expiry of the issuing certificate.
+                format: date-time
+                type: string
+              conditions:
+                description: 'Conditions: Ready.'
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              issuerKeyID:
+                description: IssuerKeyID is the subject key identifier of the issuing
+                  certificate.
+                type: string
+              profiles:
+                description: Profiles the ClusterIssuer exposes, sorted by name.
+                items:
+                  description: ProfileStatus describes a profile the issuer serves.
+                  properties:
+                    backdate:
+                      type: string
+                    expiry:
+                      type: string
+                    name:
+                      type: string
+                    usages:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - name
+                  type: object
+                type: array
+              rootCertificate:
+                description: RootCertificate is the root bundle, PEM (what ca.crt
+                  carries).
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/effective-security/kubeca/internal/certinit"
+	"github.com/effective-security/kubeca/internal/k8snames"
 	"github.com/effective-security/kubeca/internal/version"
 	"github.com/effective-security/xlog"
 	"github.com/effective-security/xlog/stackdriver"
@@ -18,10 +19,13 @@ import (
 var logger = xlog.NewPackageLogger("github.com/effective-security/kubeca", "kubecertinit")
 
 const (
-	serviceName          = "kubecertinit"
-	defaultCertDir       = "/etc/tls"
-	defaultClusterDomain = "cluster.local"
-	exitError            = 2
+	serviceName    = "kubecertinit"
+	defaultCertDir = "/etc/tls"
+	// defaultTimeout bounds the wait for the certificate (KUBECA-006): the
+	// init container exits 2 and the kubelet restarts it with backoff
+	// instead of a Pod stuck in Init for ever.
+	defaultTimeout = 10 * time.Minute
+	exitError      = 2
 )
 
 func main() {
@@ -40,7 +44,7 @@ func main() {
 	flag.StringVar(&r.Namespace, "namespace", "", "namespace as defined by pod.metadata.namespace")
 	flag.StringVar(&r.PodName, "pod-name", "", "name as defined by pod.metadata.name")
 	flag.StringVar(&r.CertDir, "cert-dir", defaultCertDir, "directory where the TLS certs should be written")
-	flag.StringVar(&r.ClusterDomain, "cluster-domain", defaultClusterDomain, "kubernetes cluster domain")
+	flag.StringVar(&r.ClusterDomain, "cluster-domain", k8snames.DefaultClusterDomain, "kubernetes cluster domain")
 	flag.StringVar(&r.Labels, "labels", "", "labels to include in CertificateSigningRequest object; comma separated list of key=value")
 	flag.BoolVar(&r.QueryK8s, "query-k8s", false, "query kubernetes for names appropriate to this Pod")
 	flag.StringVar(&r.SAN, "san", "", "additional SAN; comma separated")
@@ -48,7 +52,7 @@ func main() {
 	flag.BoolVar(&r.IncludeUnqualified, "include-unqualified", false, "include unqualified .svc domains in names from --query-k8s and --service-names")
 	flag.StringVar(&r.SignerName, "signer", "", "signer name")
 	flag.StringVar(&r.Usages, "usages", "", "key usages to request, comma separated; required for a profile other than peer, server or client")
-	flag.DurationVar(&timeout, "timeout", 0, "give up waiting for the certificate after this duration; 0 waits for ever")
+	flag.DurationVar(&timeout, "timeout", defaultTimeout, "give up waiting for the certificate after this duration and exit 2; 0 waits for ever")
 	flag.BoolVar(&withStackdriver, "stackdriver", false, "Enable stackdriver logs formatting.")
 	flag.BoolVar(&showVersion, "version", false, "Print the version and exit.")
 	flag.Parse()

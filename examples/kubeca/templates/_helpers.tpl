@@ -62,3 +62,18 @@ Create the name of the service account to use
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Name of the Secret with the issuing CA files
+*/}}
+{{- define "kubeca.certsSecretName" -}}
+{{- default (printf "%s-certs-secret-tf" (include "kubeca.fullname" .)) .Values.certs.secretName -}}
+{{- end -}}
+
+{{/*
+Name of the MutatingWebhookConfiguration the operator patches (cluster-scoped,
+so it carries the release name)
+*/}}
+{{- define "kubeca.webhookConfigName" -}}
+{{- printf "%s-pod-injector" (include "kubeca.fullname" .) -}}
+{{- end -}}

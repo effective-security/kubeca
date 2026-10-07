@@ -1,6 +1,9 @@
 image:
   repository: effectivesecurity/kubeca
-  tag: sha-225d04f
+  # The image must contain the flags this chart passes (v0.9 or later).
+  # CI pushes `main` on every push to main and `sha-<commit>` tags; pin a
+  # sha-<commit> or v0.9.<n> tag in production.
+  tag: main
   pullPolicy: Always
 
 imagePullSecrets: []
@@ -21,14 +24,14 @@ securityContext:
 #  runAsNonRoot: true
 #  runAsUser: 9000
 
-autoscaling:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 2
-  targetCPUUtilizationPercentage: 85
-
+# Two replicas by default: the controllers run on the leader, the webhook
+# server on every replica, and the PodDisruptionBudget (rendered above 1)
+# keeps one up during a rollout. With one replica and the webhook's
+# `failurePolicy: Fail`, labeled Pods cannot be created while that replica
+# restarts or is rescheduled; set 1 only with `failurePolicy: Ignore` or
+# without the webhook.
 replicaCount:
-  default: 1
+  default: 2
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -40,11 +43,109 @@ serviceAccount:
   name: kubeca
 
 # The config files are the ones under etc/, mounted at /kubeca/etc; the
-# binary's own defaults name different files.
+# binary's own defaults name different files. The deployment appends the
+# flags computed from csrSigner and operator below.
 command:
   - /app/kubeca
   - -ca-cfg=/kubeca/etc/ca-config.kubeca.yaml
   - -hsm-cfg=/kubeca/etc/aws-kms-us-west-2.yaml
+
+# Kubernetes cluster domain of the names kubeca derives (-cluster-domain);
+# the ClusterIssuer policies below match it through ${CLUSTER_DOMAIN}.
+clusterDomain: cluster.local
+
+# Port of the Prometheus endpoint (-metrics-addr) and of the container port
+# named metrics.
+metricsPort: 9090
+
+# Port of /healthz and /readyz (-health-probe-addr) and of the container
+# port named health. The readiness probe uses /readyz, which waits for the
+# webhook server, so the webhook Service only routes to ready replicas.
+healthProbePort: 8081
+
+# The CertificateSigningRequest signer of the deprecated init-container
+# flow (kubecertinit).
+csrSigner:
+  enabled: true
+  # CSR approval (KUBECA-001): off signs every CSR of a known signer,
+  # audit logs the CSRs enforce would deny and signs them, enforce
+  # approves a CSR whose names match the requesting ServiceAccount's Pods
+  # and Services and denies the others.
+  approve: enforce
+  # Names every requester may use with approve audit/enforce.
+  allowedNames: localhost,127.0.0.1
+  # Create the kubeca:csr-creator ClusterRole that workloads bind to. Off
+  # by default: examples/initcontainer/rbac.yaml creates the same
+  # ClusterRole, and Helm refuses to adopt an object it did not create.
+  createCSRCreatorRole: false
+
+# The operator: ClusterIssuer, Certificate and Pod controllers of the
+# kubeca.effectivesecurity/v1alpha1 API (crds/) and the Pod mutating
+# webhook. Leader election is on in operator mode.
+operator:
+  enabled: true
+  # The ValidatingAdmissionPolicy of templates/admission-policy.yaml: only
+  # the operator's ServiceAccount creates a Certificate controlled by a Pod
+  # or changes its spec or owners, so the issuer policy placeholder
+  # ${SERVICE_ACCOUNT} cannot be claimed by another Certificate author.
+  # Rendered on Kubernetes 1.30 or later.
+  podCertificatePolicy: true
+  webhook:
+    enabled: true
+    port: 9443
+    # Signer of the webhook's own serving certificate: the profile must be
+    # served by the issuer (etc/ca-config.kubeca.yaml, profile webhook).
+    signer: kubeca.svc/webhook
+    # Fail rejects labeled Pods while no replica serves the webhook (hence
+    # replicaCount.default 2); Ignore lets them start without the injected
+    # Secret.
+    failurePolicy: Fail
+
+# Profiles merged into etc/ca-config.kubeca.yaml under `profiles:`, for
+# deployments that need more than the shipped ones without editing the
+# chart (for example a short e2e profile).
+extraProfiles: {}
+
+# ClusterIssuers the chart creates in operator mode: the cluster
+# administrator's policy for the Certificates of each issuer label
+# (Documentation/design/operator-api.md). The default exposes the 24 h
+# profiles of etc/ca-config.kubeca.yaml to namespaces labeled
+# kubeca.effectivesecurity/enabled=true, pins DNS names to the namespace
+# (${CLUSTER_DOMAIN} is the operator's clusterDomain above) and SPIFFE IDs
+# to the namespace's ServiceAccounts in the cluster.local trust domain,
+# and publishes the root bundle into the ConfigMap kubeca-ca of every
+# namespace that holds a Certificate. An empty list creates none.
+clusterIssuers:
+  - name: kubeca
+    spec:
+      issuerLabel: kubeca.svc
+      profiles: [peer-24h, server-24h, client-24h]
+      defaultProfile: peer-24h
+      spiffe:
+        trustDomain: cluster.local
+      policy:
+        namespaceSelector:
+          matchLabels:
+            kubeca.effectivesecurity/enabled: "true"
+        maxDuration: 24h
+        allowedDNSNames:
+          - ^[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          - ^[a-z0-9-]+\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          # one wildcard label over a headless Service (StatefulSet Pod names)
+          - ^\*\.[a-z0-9-]+\.${NAMESPACE}\.svc(\.${CLUSTER_DOMAIN})?$
+          - ^[0-9a-f-]+\.${NAMESPACE}\.pod\.${CLUSTER_DOMAIN}$
+          - ^localhost$
+        allowedURIs:
+          - ^spiffe://cluster\.local/ns/${NAMESPACE}/sa/[a-z0-9-]+$
+        allowIPAddresses: true
+      caBundle:
+        configMapName: kubeca-ca
+
+# The Secret with the issuing CA files mounted at /kubeca/certs (keys:
+# kubeca_ca_g1.pem, kubeca_ca_g1.key, kubeca_root.pem; see issuers below).
+# The chart does not create it. Empty: <fullname>-certs-secret-tf.
+certs:
+  secretName: ""
 
 resources:
   requests:

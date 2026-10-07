@@ -26,14 +26,40 @@ clean:
 		${COVPATH} \
 
 GOLANGCI_LINT_VERSION ?= v2.13.2
+# controller-gen generates the deepcopy methods of api/ (make generate) and
+# the CRDs, RBAC and webhook manifests under config/ (make manifests).
+CONTROLLER_GEN_VERSION ?= v0.20.1
+# setup-envtest downloads the kube-apiserver and etcd binaries the envtest
+# tests use (make envtest); the version follows the k8s.io module minor.
+SETUP_ENVTEST_VERSION ?= release-0.25
+ENVTEST_K8S_VERSION ?= 1.37.x
+ENVTEST_DIR := $(PROJ_BIN)/envtest
+# Exported to go test: the envtest tests skip when it is empty (binaries
+# not downloaded). -i only looks at what is installed, never downloads.
+export KUBEBUILDER_ASSETS ?= $(shell $(PROJ_BIN)/setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR) -i -p path 2>/dev/null)
 
 tools:
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/go-phorce/cov-report/cmd/cov-report@latest
-	go install github.com/mattn/goveralls@latest
 	go install github.com/effective-security/xpki/cmd/hsm-tool@latest
 	go install github.com/effective-security/xpki/cmd/xpki-tool@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
+	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION)
+
+# CRDs, the aggregated RBAC of the +kubebuilder:rbac markers and the webhook
+# configuration go to config/; the CRDs are copied into the chart. The chart
+# RBAC templates are hand-written and must stay in sync with config/rbac
+# (AGENTS.md); CI fails when a commit forgets to regenerate.
+manifests:
+	echo "*** Generating CRDs, RBAC and webhook manifests"
+	controller-gen crd rbac:roleName=kubeca-operator webhook paths="./api/...;./internal/...;./cmd/..." \
+		output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac output:webhook:artifacts:config=config/webhook
+	cp config/crd/bases/*.yaml examples/kubeca/crds/
+
+envtest:
+	echo "*** Installing envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION) into $(ENVTEST_DIR)"
+	$(PROJ_BIN)/setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR) -p path
 
 folders:
 
@@ -48,6 +74,10 @@ build_kubecertinitt:
 	echo "*** Building kubecertinit"
 	go build ${BUILD_FLAGS} ${LDFLAGS} -o ${PROJ_ROOT}/bin/kubecertinit ./cmd/kubecertinit
 
+build_certmonitor:
+	echo "*** Building certmonitor"
+	go build ${BUILD_FLAGS} ${LDFLAGS} -o ${PROJ_ROOT}/bin/certmonitor ./cmd/certmonitor
+
 build: build_kube build_kubecertinitt
 
 change_log:
@@ -59,10 +89,6 @@ change_log:
 
 commit_version:
 	git add .; git commit -m "Updated version"
-
-coveralls-github:
-	echo "Running coveralls"
-	goveralls -v -coverprofile=coverage.out -service=github -package ./...
 
 docker: change_log
 	docker build --no-cache -f Dockerfile.kubeca -t effectivesecurity/kubeca:main .
@@ -148,7 +174,7 @@ kubeca-ceremony-aws:
 
 # minikube: build the images, load them, install the chart with the ceremony
 # output, deploy a dummy workload with the init container and verify it.
-minikube-images: build change_log
+minikube-images: build build_certmonitor change_log
 	./scripts/minikube_images.sh
 
 minikube-deploy:

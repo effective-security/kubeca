@@ -8,7 +8,7 @@ require (
 	github.com/effective-security/xlog v0.12.67
 	github.com/effective-security/xpki v1.0.310
 	github.com/go-logr/logr v1.4.4
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	k8s.io/api v0.37.1

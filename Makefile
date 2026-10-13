@@ -25,7 +25,7 @@ clean:
 		./.gopath \
 		${COVPATH} \
 
-GOLANGCI_LINT_VERSION ?= v2.13.2
+GOLANGCI_LINT_VERSION ?= v2.14.0
 # controller-gen generates the deepcopy methods of api/ (make generate) and
 # the CRDs, RBAC and webhook manifests under config/ (make manifests).
 CONTROLLER_GEN_VERSION ?= v0.20.1

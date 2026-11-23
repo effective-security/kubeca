@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/effective-security/porto v1.1.455
-	github.com/effective-security/xlog v1.0.70
+	github.com/effective-security/xlog v1.0.71
 	github.com/effective-security/xpki v1.1.322
 	github.com/go-logr/logr v1.4.4
 	github.com/prometheus/client_golang v1.25.0

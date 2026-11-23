@@ -67,8 +67,8 @@ github.com/effective-security/porto v1.1.455 h1:l6PDq2SkNK4rddZBKUFmJ4uY9plpvSQL
 github.com/effective-security/porto v1.1.455/go.mod h1:GZFc6cBNYLTxL2m57iAYCJR0yErW+fCCiC6vGwqnmhw=
 github.com/effective-security/x v1.0.111 h1:m5C4328FG83zuh0PqwY5DmFw+BzKt7FaGAvyufU2aE0=
 github.com/effective-security/x v1.0.111/go.mod h1:m3fwfNhwpgODTFSaimfC5uwnDodPLl7uLCAVCt3M6ic=
-github.com/effective-security/xlog v1.0.70 h1:x4gk27sqvk8zOOkF+rrV6PYDBPNFoSsArF9pwRKvUWc=
-github.com/effective-security/xlog v1.0.70/go.mod h1:fqpNKLf1TsFZ10ezJDvEJZ8W6TZKRXpd/XYNIRDu52A=
+github.com/effective-security/xlog v1.0.71 h1:ITZb2zRLdVoaiRJSkdIP2fjM6n8FfvGdiSVQyTR/XEc=
+github.com/effective-security/xlog v1.0.71/go.mod h1:OJ1oma1sf7/m67vANTTNarnrU8Qg4CnaC0F0vkaiblo=
 github.com/effective-security/xpki v1.1.322 h1:bklyj/5HNf5CkXPx+rNtfIL3cDyHRkYZoBMZlF8ReO8=
 github.com/effective-security/xpki v1.1.322/go.mod h1:EQLL3UMsuG36QmENclM+10Bs37UTy3QK8fTwH8ZZef4=
 github.com/emicklei/go-restful/v3 v3.13.0 h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes=
